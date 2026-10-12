@@ -94,7 +94,7 @@ export function useFrameMaxHeight(cardRef: RefObject<HTMLElement>, boxRef: RefOb
     ro?.observe(scroller)
     ro?.observe(card)
     // The banner grows and shrinks (a longer prompt, its fold): re-fit with it.
-    for (const el of topOverlays()) ro?.observe(el)
+    for (const el of topOverlays(card)) ro?.observe(el)
     return () => {
       scroller.removeEventListener('scroll', onScroll)
       cancelAnimationFrame(raf)

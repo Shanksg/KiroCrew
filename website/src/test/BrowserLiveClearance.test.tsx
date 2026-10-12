@@ -6,7 +6,7 @@ import '../i18n/all'
 
 import BrowserLiveCard from '../pages/chat/BrowserLiveCard'
 import { browserLiveStore } from '../hooks/useBrowserLive'
-import { ASIDE_ATTR, CLEARANCE_GAP_PX, TOP_OVERLAY_ATTR, holdPinnedPromptAside, overlayInset, overlayOverlap, pinnedPromptAside } from '../pages/chat/browserLiveClearance'
+import { ASIDE_ATTR, CLEARANCE_GAP_PX, TOP_OVERLAY_ATTR, TOP_OVERLAY_GROWS, growingTopOverlays, holdPinnedPromptAside, overlayInset, overlayOverlap, pinnedPromptAside } from '../pages/chat/browserLiveClearance'
 import type { DecodedBrowserFrame } from '../hooks/useBrowserLive.frame'
 
 /**
@@ -95,6 +95,30 @@ describe('the grown card keeps its header clear of the top overlay', () => {
     card.remove()
   })
 
+  // Split view: each pane has its own top dock and banner. A card measures only
+  // the pane it sits in, so a taller dock in the next pane never moves it.
+  it('a card in a split-view pane measures only its own pane\'s overlays', () => {
+    const paneA = document.createElement('div')
+    paneA.setAttribute('data-pane-slot', 'slot:a')
+    const paneB = document.createElement('div')
+    paneB.setAttribute('data-pane-slot', 'slot:b')
+    const dockA = document.createElement('div')
+    dockA.setAttribute(TOP_OVERLAY_ATTR, TOP_OVERLAY_GROWS)
+    const dockB = document.createElement('div')
+    dockB.setAttribute(TOP_OVERLAY_ATTR, TOP_OVERLAY_GROWS)
+    const card = document.createElement('div')
+    paneA.append(dockA, card)
+    paneB.append(dockB)
+    document.body.append(paneA, paneB)
+    vi.spyOn(dockA, 'getBoundingClientRect').mockReturnValue(rect(0, 150))
+    vi.spyOn(dockB, 'getBoundingClientRect').mockReturnValue(rect(0, 400))
+    vi.spyOn(card, 'getBoundingClientRect').mockReturnValue(rect(100, 700))
+    expect(overlayOverlap(card)).toBe(150 + CLEARANCE_GAP_PX - 100)
+    expect(growingTopOverlays(card)).toEqual([dockA])
+    paneA.remove()
+    paneB.remove()
+  })
+
   it('the room a grown card may fill leaves out what the overlay covers', () => {
     const scroller = document.createElement('div')
     const overlay = document.createElement('div')
@@ -119,6 +143,45 @@ describe('the grown card keeps its header clear of the top overlay', () => {
     expect(scroller.scrollTop).toBe(1000 - 58)
     expect(overlayOverlap(card)).toBe(0)
     expect(screen.getByText('You are in control')).toBeInTheDocument()
+  })
+
+  it('a growing overlay (the top-down dock) that grows after the settle pass is cleared again', async () => {
+    vi.useFakeTimers()
+    let roCallback: ResizeObserverCallback | null = null
+    const observed: Element[] = []
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(cb: ResizeObserverCallback) { roCallback = cb }
+      observe(el: Element) { observed.push(el) }
+      unobserve() {}
+      disconnect() { roCallback = null }
+    })
+    act(() => { browserLiveStore.applyEvent(ev()); browserLiveStore.applyFrame(frame(1)) })
+    const { overlay, scroller, card } = mountUnderOverlay(100, 150)
+    overlay.setAttribute(TOP_OVERLAY_ATTR, TOP_OVERLAY_GROWS)
+    act(() => browserLiveStore.applyEvent(ev({ state: 'in_control' })))
+    await act(async () => { vi.advanceTimersByTime(500) })
+    expect(scroller.scrollTop).toBe(1000 - 58)
+    expect(observed).toContain(overlay)
+    // The dock grows 100 px after the settle pass: the card is cleared again.
+    vi.spyOn(overlay, 'getBoundingClientRect').mockReturnValue(rect(0, 250))
+    expect(overlayOverlap(card)).toBe(100)
+    act(() => { roCallback?.([], {} as ResizeObserver) })
+    expect(scroller.scrollTop).toBe(1000 - 158)
+    expect(overlayOverlap(card)).toBe(0)
+    overlay.remove()
+  })
+
+  it('only an overlay marked as growing is re-cleared on resize (the title row is not)', () => {
+    const title = document.createElement('div')
+    title.setAttribute(TOP_OVERLAY_ATTR, '')
+    const dock = document.createElement('div')
+    dock.setAttribute(TOP_OVERLAY_ATTR, TOP_OVERLAY_GROWS)
+    document.body.append(title, dock)
+    expect(growingTopOverlays(document.body)).toContain(dock)
+    expect(growingTopOverlays(document.body)).not.toContain(title)
+    title.remove()
+    dock.remove()
+    expect(growingTopOverlays(document.body)).not.toContain(dock)
   })
 
   it('the grown frame re-fits under a pinned prompt that appears as the transcript scrolls', async () => {

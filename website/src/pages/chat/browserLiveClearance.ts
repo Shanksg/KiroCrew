@@ -3,7 +3,12 @@
  *
  * The chat transcript scrolls UNDER an absolute overlay: the title row and the
  * pinned-prompt banner (`ChatTitleOverlay`, marked `data-transcript-top-overlay`,
- * and the banner's own `data-testid="pinned-prompt"`). When the person takes
+ * and the banner's own `data-testid="pinned-prompt"`). In the top-down layout
+ * the composer dock floats over the transcript's top edge too, below the title
+ * row, so its root (`ComposerDockView`, and `ChatPane` in split view) carries
+ * the same marker there; the bottom dock covers the bottom edge and carries
+ * none. A card in a split-view pane measures only its own pane's overlays, so
+ * it never clears another pane's dock or banner. When the person takes
  * over, the card grows and takes focus, and its header (who is in control,
  * the address, Hand back) can end up under that overlay. This measures how far
  * the header's top edge sits under the overlay's lowest edge and scrolls the
@@ -11,7 +16,8 @@
  *
  * Measured from layout, never from the banner's internals, so the banner stays
  * untouched apart from two marker attributes: one on the overlay root, one on the
- * banner's band.
+ * banner's band. The lowest marked edge wins, so in top-down the dock's bottom
+ * is the edge the header clears.
  *
  * While the person holds the browser the pinned-prompt banner also steps aside
  * (`holdPinnedPromptAside`): it pins the prompt that scrolled away, which during
@@ -21,21 +27,39 @@
 
 export const TOP_OVERLAY_ATTR = 'data-transcript-top-overlay'
 
+/** The marker's value on an overlay whose height changes while it is mounted
+ *  (the top-down composer dock, as its status stack and input grow). A card in
+ *  control clears it again on each change. The title row's value is ''. */
+export const TOP_OVERLAY_GROWS = 'grows'
+
 /** Space kept between the overlay's lower edge and the card's top, in px. */
 export const CLEARANCE_GAP_PX = 8
 
-/** The overlay's elements (the title row's root and the pinned-prompt card). */
-export function topOverlays(): HTMLElement[] {
-  return [...document.querySelectorAll<HTMLElement>(`[${TOP_OVERLAY_ATTR}], [data-testid="pinned-prompt"]`)]
+/** Where `el`'s overlays live: the split-view pane it sits in (`ChatPane`'s
+ *  root carries `data-pane-slot`), or the whole document on the chat page. */
+function overlayScope(el: Element): ParentNode {
+  return el.closest('[data-pane-slot]') ?? document
 }
 
-/** The overlay's lowest edge on screen, or null when there is none. */
-function overlayBottom(): number | null {
+/** The overlay's elements over `el`'s transcript (the title row's root, the
+ *  pinned-prompt card, and in the top-down layout the composer dock's root). */
+export function topOverlays(el: Element): HTMLElement[] {
+  return [...overlayScope(el).querySelectorAll<HTMLElement>(`[${TOP_OVERLAY_ATTR}], [data-testid="pinned-prompt"]`)]
+}
+
+/** The marked overlays over `el`'s transcript whose height changes while
+ *  mounted (`TOP_OVERLAY_GROWS`). */
+export function growingTopOverlays(el: Element): HTMLElement[] {
+  return [...overlayScope(el).querySelectorAll<HTMLElement>(`[${TOP_OVERLAY_ATTR}="${TOP_OVERLAY_GROWS}"]`)]
+}
+
+/** The lowest edge on screen of the overlays over `el`'s transcript, or null when there is none. */
+function overlayBottom(el: Element): number | null {
   let bottom = -Infinity
-  for (const el of topOverlays()) {
+  for (const o of topOverlays(el)) {
     // A banner set aside (visibility hidden) keeps its box but covers nothing.
-    if (getComputedStyle(el).visibility === 'hidden') continue
-    const r = el.getBoundingClientRect()
+    if (getComputedStyle(o).visibility === 'hidden') continue
+    const r = o.getBoundingClientRect()
     if (r.height > 0 && r.bottom > bottom) bottom = r.bottom
   }
   return Number.isFinite(bottom) ? bottom : null
@@ -43,7 +67,7 @@ function overlayBottom(): number | null {
 
 /** How far (px) the card's top sits under the transcript's top overlay; 0 when clear. */
 export function overlayOverlap(card: HTMLElement, gap = CLEARANCE_GAP_PX): number {
-  const bottom = overlayBottom()
+  const bottom = overlayBottom(card)
   if (bottom === null) return 0
   return Math.max(0, Math.ceil(bottom + gap - card.getBoundingClientRect().top))
 }
@@ -53,7 +77,7 @@ export function overlayOverlap(card: HTMLElement, gap = CLEARANCE_GAP_PX): numbe
  * px: what a card that must fit in view can NOT use. 0 with no overlay.
  */
 export function overlayInset(scroller: HTMLElement, gap = CLEARANCE_GAP_PX): number {
-  const bottom = overlayBottom()
+  const bottom = overlayBottom(scroller)
   if (bottom === null) return 0
   return Math.max(0, Math.ceil(bottom + gap - scroller.getBoundingClientRect().top))
 }
