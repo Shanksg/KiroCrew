@@ -548,6 +548,13 @@ class TestLeafOnlyPopulationIsRecorded:
     #: it cannot take a stand-in; nothing republishes ``state`` itself (its writers rename
     #: files INSIDE it), and its parents are pinned against rename.
     #:
+    #: One more root-level directory, three entries per tier:
+    #:
+    #: * ``mcp-resource-subscriptions`` -- the holder's durable Register,
+    #:   initialize and server-defined URIs. A URI may be a credential and a forged
+    #:   record chooses which session gets an unsandboxed holder at startup. The
+    #:   directory is at the data-home root so its own mask is the only available hold.
+    #:
     #: The record is one line per name, not a count per tier: two changes that each
     #: add a different leaf add different lines and stay green merged, where a count
     #: would be rewritten to the same number by both (testing-conventions.md
@@ -622,6 +629,7 @@ class TestLeafOnlyPopulationIsRecorded:
         "<crew>/live_target.json": (3, "standard cc strict"),
         "<crew>/mcp-apps": (3, "standard cc strict"),
         "<crew>/mcp-launch-approvals": (3, "standard cc strict"),
+        "<crew>/mcp-resource-subscriptions": (3, "standard cc strict"),
         "<crew>/mcp/resolved": (3, "standard cc strict"),
         "<crew>/mcp_body_fields.json": (3, "standard cc strict"),
         "<crew>/md-notebook-staging": (3, "standard cc strict"),

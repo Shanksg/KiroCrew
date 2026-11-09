@@ -77,8 +77,11 @@ FORBIDDEN_BEFORE_THE_LIST = (
 #: Raised by 1 again for all four: the ssh-to-self floor's substitution-body check lives in
 #: its own module, ``kiro_crew.security.argv_floor_ssh_bodies``, which the deny floor that
 #: every listing already loads imports.
+#: Raised by 1 for ``mcp-core`` (490 to 491): the resource-subscription tools'
+#: declarations live in their own ``kiro_crew.mcp_tools.catalog.resources``, which
+#: the core listing loads from ``mcp_tools.DOMAIN_MODULES`` like every other domain.
 PACKAGE_MODULE_CEILING = {
-    "mcp-core": 490,
+    "mcp-core": 491,
     "mcp-cron": 360,
     "mcp-guide": 354,
     "mcp-mate": 355,

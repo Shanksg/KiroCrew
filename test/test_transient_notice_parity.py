@@ -391,6 +391,15 @@ def test_run_time_chosen_tokens_match_their_wording() -> None:
         )
         == "capacity_retry_cancelled_stopped"
     )
+    # The resource-wake budget row composes its sentence at run time.
+    assert (
+        _legacy_token(
+            "⏸ Resource subscription rsub_0000000000000007 on crux (fake) reached its 48 "
+            "wakes for 2026-11-01 (UTC) and is paused until the next UTC day. Updates "
+            "meanwhile are folded into one wake after the pause."
+        )
+        == "resource_wake_budget_paused"
+    )
 
 
 def test_every_cancelled_replay_wording_has_its_own_token() -> None:
