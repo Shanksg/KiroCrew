@@ -70,11 +70,16 @@ FORBIDDEN_BEFORE_THE_LIST = (
 #: Raised by 1 for each server: the rule table reads headers and encoded credentials in
 #: two modules of its own (``redaction_structured.headers`` and ``.encoded``) where
 #: ``.protection`` was one.
+#: Raised by 1 for ``mcp-core`` (488 to 489), ``mcp-cron`` (358 to 359), ``mcp-guide``
+#: (352 to 353) and ``mcp-mate`` (353 to 354): the listing already loads
+#: ``security.argv_floor_self``, and its self-kill check imports
+#: ``security.argv_floor_pager`` (the ``git grep`` pager read) at module level, so the deny
+#: floor is whole wherever the security package is.
 PACKAGE_MODULE_CEILING = {
-    "mcp-core": 488,
-    "mcp-cron": 358,
-    "mcp-guide": 352,
-    "mcp-mate": 353,
+    "mcp-core": 489,
+    "mcp-cron": 359,
+    "mcp-guide": 353,
+    "mcp-mate": 354,
 }
 
 #: The modules that read the two live values in the spawn tools' descriptions. They are
