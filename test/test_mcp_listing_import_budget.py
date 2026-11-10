@@ -70,11 +70,18 @@ FORBIDDEN_BEFORE_THE_LIST = (
 #: Raised by 1 for each server: the rule table reads headers and encoded credentials in
 #: two modules of its own (``redaction_structured.headers`` and ``.encoded``) where
 #: ``.protection`` was one.
+#: Raised by 2 for each server: signature scheme 2 adds two modules the listing loads.
+#: Startup primes the app config keys (``prime_extension_config_keys``), which loads
+#: ``kiro_crew.apps.manager`` and its owner ``manager_install``, which imports
+#: ``kiro_crew.apps.admission``. The admission gate imports ``kiro_crew.apps.package_signature``
+#: (the file inventory check) and ``kiro_crew.apps.signed_first`` (the names of the
+#: checked-list variables) at module level, and the manifest parser imports
+#: ``package_signature`` for ``FILES_KEY``. Their other imports are already loaded.
 PACKAGE_MODULE_CEILING = {
-    "mcp-core": 488,
-    "mcp-cron": 358,
-    "mcp-guide": 352,
-    "mcp-mate": 353,
+    "mcp-core": 490,
+    "mcp-cron": 360,
+    "mcp-guide": 354,
+    "mcp-mate": 355,
 }
 
 #: The modules that read the two live values in the spawn tools' descriptions. They are
