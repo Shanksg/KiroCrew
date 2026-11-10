@@ -9,6 +9,7 @@ import { useImeGuard } from '../../hooks/useImeGuard'
 import { api, type SlackSharedUser } from '../../api/client'
 import { ApiError } from '../../api/apiError'
 import { i18nT } from '../../i18n/t'
+import { splitOnPlaceholder } from '../../lib/splitOnPlaceholder'
 
 /** Query key of `GET /api/slack/shared-access`. */
 export const SLACK_SHARED_ACCESS_KEY = ['slack-shared-access'] as const
@@ -61,6 +62,18 @@ function refusalCode(e: unknown): string {
   }
 }
 
+/**
+ * The confirm's line for a listed person Slack did not confirm, by the same name and ID
+ * their list row shows: the reason first, then that they get access later on their own
+ * and how to keep them out with what the page has (cancel, remove, then turn on).
+ */
+function wontGetAccess(u: SlackSharedUser): string {
+  const reason = reasonText(u.reason)
+  return u.name
+    ? i18nT('pages.settings.slackSharedAccess.wont_get_access', { name: u.name, id: u.user_id, reason })
+    : i18nT('pages.settings.slackSharedAccess.wont_get_access_id', { id: u.user_id, reason })
+}
+
 /** What the owner must read before sharing, shown on the page and in the confirm. */
 function SharedAccessWarning({ id }: { id?: string }) {
   return (
@@ -72,6 +85,17 @@ function SharedAccessWarning({ id }: { id?: string }) {
           <li>{i18nT('pages.settings.slackSharedAccess.warning_acts_as_you')}</li>
           <li>{i18nT('pages.settings.slackSharedAccess.warning_threads')}</li>
           <li>{i18nT('pages.settings.slackSharedAccess.warning_memory')}</li>
+          {/* Named, not linked: this warning sits in the Slack settings form and its
+              confirm, whose unsaved fields a navigation away would unmount and lose. */}
+          <li>
+            {splitOnPlaceholder(i18nT('pages.settings.slackSharedAccess.warning_tools'), 'page').map((part, i) =>
+              part === null ? (
+                <strong key="page">{i18nT('nav.schedule')}</strong>
+              ) : (
+                <span key={i}>{part}</span>
+              ),
+            )}
+          </li>
           <li>{i18nT('pages.settings.slackSharedAccess.warning_trust')}</li>
         </ul>
       </div>
@@ -79,13 +103,17 @@ function SharedAccessWarning({ id }: { id?: string }) {
   )
 }
 
-function SharedUserRow({ user, readOnly, onRemove, removing }: {
+function SharedUserRow({ user, readOnly, sharing, onRemove, removing }: {
   user: SlackSharedUser
   readOnly: boolean
+  /** Sharing is on: only then can a Slack answer later give this person access. */
+  sharing: boolean
   onRemove: (id: string) => void
   removing: boolean
 }) {
   const label = user.name || user.user_id
+  // While off, a Slack answer gives nobody access: the row says only the reason.
+  const later = sharing ? ` ${i18nT('pages.settings.slackSharedAccess.not_confirmed')}` : ''
   return (
     <li className="flex items-center gap-2 py-1 text-[13px]">
       <span className="min-w-0 flex-1">
@@ -96,12 +124,14 @@ function SharedUserRow({ user, readOnly, onRemove, removing }: {
              are unsaved; a hand-off to the chat unmounts this panel and loses them. */
           <span className="block">
             <ErrorNotice impact="partial" variant="inline"
-              message={`${i18nT('pages.settings.slackSharedAccess.not_confirmed')} ${reasonText(user.reason)}`} />
+              message={`${reasonText(user.reason)}${later}`} />
           </span>
         )}
         {!user.confirmed && !checkFailed(user.reason) && (
           <span className="block text-[12px] text-warn-text">
-            {i18nT('pages.settings.slackSharedAccess.not_confirmed')} {reasonText(user.reason)}
+            {reasonText(user.reason)}
+            {/* The owner's own ID needs no consequence line: they already have access. */}
+            {user.reason !== 'owner' && later}
           </span>
         )}
       </span>
@@ -170,13 +200,25 @@ export function SlackSharedAccess() {
 
   // No hand-off: this notice sits inside the Slack settings form, whose unsaved
   // fields a hand-off to the chat would unmount and lose.
-  if (loadError) return <ErrorNotice message={i18nT('pages.settings.slackSharedAccess.load_failed')} variant="inline" />
+  if (loadError) {
+    // The inline notice draws no action row, so Try again sits beside it; it re-reads the section.
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <ErrorNotice message={i18nT('pages.settings.slackSharedAccess.load_failed')} variant="inline" />
+        <Btn onClick={() => { void refresh() }}>{i18nT('components.errorBoundary.try_again')}</Btn>
+      </div>
+    )
+  }
   if (!data) return null
   // A gateway older than this route answers it with some other body: show nothing.
   if (typeof data.enabled !== 'boolean') return null
   const users = Array.isArray(data.users) ? data.users : []
   const ro = data.read_only !== false
   const busy = switchMut.isPending || addMut.isPending || removeMut.isPending
+  // "People with access" only while sharing is on: while off, nobody listed has it.
+  const peopleLabel = i18nT(data.enabled
+    ? 'pages.settings.slackSharedAccess.people_label'
+    : 'pages.settings.slackSharedAccess.people_label_off')
 
   const onToggle = async (next: boolean) => {
     setSwitchHint('')
@@ -184,7 +226,8 @@ export function SlackSharedAccess() {
       // The confirm names who gets access: only people Slack confirmed do.
       if (users.length === 0) { setSwitchHint(i18nT('pages.settings.slackSharedAccess.people_first')); return }
       const granted = users.filter(u => u.confirmed)
-      const refused = users.filter(u => !u.confirmed)
+      // The owner's own ID on the list already has access: it is neither granted nor refused here.
+      const refused = users.filter(u => !u.confirmed && u.reason !== 'owner')
       if (granted.length === 0) { setSwitchHint(i18nT('pages.settings.slackSharedAccess.people_none_confirmed')); return }
       const ok = await confirm({
         title: i18nT('pages.settings.slackSharedAccess.confirm_title', { count: granted.length }),
@@ -197,12 +240,12 @@ export function SlackSharedAccess() {
               /* No hand-off: this sits in the confirm dialog over the unsaved Slack
                  settings form; a hand-off to the chat would unmount and lose it. */
               <div key={u.user_id} className="mt-1">
-                <ErrorNotice impact="partial" variant="inline"
-                  message={`${i18nT('pages.settings.slackSharedAccess.wont_get_access', { name: u.name || u.user_id })} ${reasonText(u.reason)}`} />
+                <ErrorNotice impact="partial" variant="inline" message={wontGetAccess(u)} />
               </div>
             ) : (
-              <div key={u.user_id} className="mt-1 text-[12px] text-muted">
-                {i18nT('pages.settings.slackSharedAccess.wont_get_access', { name: u.name || u.user_id })} {reasonText(u.reason)}
+              // Warn text, never muted: this person can still get access later.
+              <div key={u.user_id} className="mt-1 text-[12px] text-warn-text">
+                {wontGetAccess(u)}
               </div>
             ))}
             <SharedAccessWarning />
@@ -233,17 +276,21 @@ export function SlackSharedAccess() {
         configKey="slack.shared_access.enabled"
         describedBy="slack-shared-access-warning"
       />
+      {/* Said at the switch, so a list under the always-on warning never reads as a live grant. */}
+      {!data.enabled && <div className="text-[12px] text-text">{i18nT('pages.settings.slackSharedAccess.off_note')}</div>}
       {switchHint && <div role="status" className="text-[12px] text-warn-text">{switchHint}</div>}
       <SharedAccessWarning id="slack-shared-access-warning" />
-      <div className="text-[12px] text-muted mb-2">{i18nT('pages.settings.slackSharedAccess.owner_only')}</div>
-      <div data-setting-label={i18nT('pages.settings.slackSharedAccess.people_label')} data-setting-key="slack.shared_access.user_ids" className="flex flex-col gap-1.5 py-1.5">
-        <span className="text-[13px] font-semibold text-text">{i18nT('pages.settings.slackSharedAccess.people_label')}</span>
+      {/* A remote session changes nothing here, so the owner-only line has nothing to say. */}
+      {!ro && <div className="text-[12px] text-muted mb-2">{i18nT('pages.settings.slackSharedAccess.owner_only')}</div>}
+      {/* The label changes with the switch; a `key:` highlight link finds this list by its config key. */}
+      <div data-setting-label={peopleLabel} data-setting-key="slack.shared_access.user_ids" className="flex flex-col gap-1.5 py-1.5">
+        <span className="text-[13px] font-semibold text-text">{peopleLabel}</span>
         {users.length === 0
           ? <div className="text-[12px] text-muted">{i18nT('pages.settings.slackSharedAccess.people_empty')}</div>
           : (
             <ul className="divide-y divide-border">
               {users.map(u => (
-                <SharedUserRow key={u.user_id} user={u} readOnly={ro} removing={removeMut.isPending} onRemove={id => removeMut.mutate(id)} />
+                <SharedUserRow key={u.user_id} user={u} readOnly={ro} sharing={data.enabled} removing={removeMut.isPending} onRemove={id => removeMut.mutate(id)} />
               ))}
             </ul>
           )}

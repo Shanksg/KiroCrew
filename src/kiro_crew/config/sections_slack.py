@@ -11,6 +11,9 @@ from dataclasses import dataclass, field
 from kiro_crew.config.fields import _meta
 from kiro_crew.config.sections_defaults import SectionReader
 
+# Not the kiro_crew.validation facade: it imports config.sections, which imports this module.
+from kiro_crew.validation_parts.input_bounds import USER_ID_RE
+
 logger = logging.getLogger("kiro_crew.config.loader")
 
 #: Longest stored value for any ``slack.code_channel_defaults`` string. A folder
@@ -114,18 +117,13 @@ class CodeChannelDefaultsConfig:
     )
 
 
-_SLACK_ID_TAIL = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-
-
 def is_slack_user_id(value: object) -> bool:
     """A Slack member id: ``U`` or ``W`` then 1 to 19 upper-case letters or digits.
 
-    The same shape as ``validation.USER_ID_RE``, checked character by character.
-    A bot id (``B...``) and a workspace id (``T...``) never match.
+    Validated by ``USER_ID_RE``, the pattern the messaging schemas use. A bot id
+    (``B...``) and a workspace id (``T...``) never match.
     """
-    if not isinstance(value, str) or not 2 <= len(value) <= 20 or value[0] not in "UW":
-        return False
-    return all(ch in _SLACK_ID_TAIL for ch in value[1:])
+    return isinstance(value, str) and USER_ID_RE.fullmatch(value) is not None
 
 
 def shared_user_ids(raw: object) -> list[str]:

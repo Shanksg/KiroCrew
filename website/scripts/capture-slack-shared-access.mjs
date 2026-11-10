@@ -4,10 +4,13 @@
  * Runs the REAL built SPA (website/dist) behind `serveDist` and answers every
  * /api/** call from fixtures through `stubDashboardApi`. No gateway, no Slack.
  *
- * Six shots: the switch off with the warning already on the page, the confirm
+ * Thirteen shots: the switch off with the warning already on the page, the confirm
  * that turning it on opens (naming who gets access), the switch on with two
  * people listed (one Slack did not confirm), the hint a malformed member ID gets,
- * what turning it on with nobody listed says, and the read-only remote view.
+ * what turning it on with nobody listed says, the read-only remote view, the hint
+ * when Slack confirmed nobody, a person Slack could not be asked about (row and
+ * confirm), a change saved but not applied, a failed save, a failed load, and the
+ * Try again notice when the section's own chunk fails to load.
  *
  * Usage: node scripts/capture-slack-shared-access.mjs [outDir]
  */
@@ -38,11 +41,20 @@ const people = [
 const { srv, base } = await serveDist()
 const browser = await chromium.launch()
 
-async function loadPanel(shared) {
-  const context = await browser.newContext({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 2 })
+// `opts.put`: the answer to turning the switch, as [status, body]; `opts.getStatus`: a
+// failing read of the section; `opts.blockChunk`: the section's own chunk fails to load.
+async function loadPanel(shared, opts = {}) {
+  // No service worker: a request it serves bypasses page.route, so blockChunk could not fail it.
+  const context = await browser.newContext({ viewport: { width: 1400, height: 1000 }, deviceScaleFactor: 2, serviceWorkers: 'block' })
   const page = await context.newPage()
   const extra = async (path, route) => {
     if (path === '/api/slack/config') { await json(route, slackConfig); return true }
+    if (path === '/api/slack/shared-access' && route.request().method() === 'PUT' && opts.put) {
+      await json(route, opts.put[1], opts.put[0]); return true
+    }
+    if (path === '/api/slack/shared-access' && opts.getStatus) {
+      await json(route, { error: 'unavailable' }, opts.getStatus); return true
+    }
     if (path === '/api/slack/shared-access') { await json(route, shared); return true }
     if (path === '/api/slack/manifest/status') { await json(route, {}); return true }
     if (path === '/api/governance/channels') {
@@ -52,7 +64,20 @@ async function loadPanel(shared) {
     return false
   }
   await stubDashboardApi(page, { extra })
+  // After the stub: the route registered last answers first.
+  if (opts.blockChunk) await page.route(/\/assets\/SlackSharedAccess-[^/]*\.js(\?|$)/, route => route.abort())
   await page.goto(`${base}/settings?tab=channels&channel=slack`, { waitUntil: 'domcontentloaded' })
+  if (opts.getStatus || opts.blockChunk) {
+    // No section renders: a notice stands in its place inside the Slack panel. A failed
+    // chunk first reloads the page once (main.tsx's vite:preloadError guard).
+    const notice = page.getByText(opts.getStatus ? /Could not load the shared access settings/ : /Try again/i).first()
+    await notice.waitFor({ timeout: 45000 })
+    await notice.scrollIntoViewIfNeeded()
+    await page.waitForTimeout(800)
+    // The chunk notice's buttons sit in its footer: frame the notice root.
+    const frame = opts.blockChunk ? 'xpath=ancestor::*[@role="alert"][1]' : 'xpath=../..'
+    return { page, section: notice.locator(frame) }
+  }
   const section = page.getByTestId('slack-shared-access')
   await section.waitFor({ timeout: 15000 })
   await section.scrollIntoViewIfNeeded()
@@ -90,6 +115,37 @@ try {
 
   const remote = await loadPanel({ enabled: true, users: people, read_only: true })
   await shotOf(remote.section, '6-read-only-remote')
+
+  const nobody = await loadPanel({ enabled: false, users: [people[1]], read_only: false })
+  await nobody.page.getByRole('switch', { name: 'Share Slack access' }).click()
+  await nobody.page.waitForTimeout(300)
+  await shotOf(nobody.section, '7-none-confirmed-hint')
+
+  const unchecked = [people[0], { user_id: 'U0LIN00001', name: 'Lin', confirmed: false, reason: 'unverifiable' }]
+  const down = await loadPanel({ enabled: false, users: unchecked, read_only: false })
+  await shotOf(down.section, '8-unverifiable-row')
+  await down.page.getByRole('switch', { name: 'Share Slack access' }).click()
+  const downDialog = down.page.getByRole('dialog')
+  await downDialog.waitFor({ timeout: 5000 })
+  await down.page.waitForTimeout(500)
+  await shotOf(downDialog, '9-confirm-unverifiable')
+
+  const pending = await loadPanel({ enabled: true, users: people, read_only: false },
+    { put: [409, { error: 'not applied', code: 'not_applied' }] })
+  await pending.page.getByRole('switch', { name: 'Share Slack access' }).click()
+  await pending.page.getByText(/^Not applied yet:/).waitFor({ timeout: 5000 })
+  await shotOf(pending.section, '10-not-applied')
+
+  const broken = await loadPanel({ enabled: true, users: people, read_only: false }, { put: [500, { error: 'boom' }] })
+  await broken.page.getByRole('switch', { name: 'Share Slack access' }).click()
+  await broken.page.getByText(/Could not save the change/).waitFor({ timeout: 5000 })
+  await shotOf(broken.section, '11-save-failed')
+
+  const unread = await loadPanel(null, { getStatus: 500 })
+  await shotOf(unread.section, '12-load-failed')
+
+  const noChunk = await loadPanel(null, { blockChunk: true })
+  await shotOf(noChunk.section, '13-try-again')
 } finally {
   await browser.close()
   srv.close()
