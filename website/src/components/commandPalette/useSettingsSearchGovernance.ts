@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api } from '../../api/client'
+import { api, type SlackConfigData } from '../../api/client'
 import { fetchDashboardConfig } from '../../api/dashboardConfigQuery'
 import { useUpdateSwitchesShown } from '../../utils/updateSwitches'
 import { isInstancesDisabledError } from '../../utils/instancesDisabled'
@@ -61,6 +61,15 @@ export function useSettingsSearchGovernance(
   // The same read holds Channels' switch, which Display > View draws only while on.
   const channelsOn = cfgQ.isSuccess
     && (cfgQ.data as { dashboard?: { channels_enabled?: unknown } } | undefined)?.dashboard?.channels_enabled === true
+  // The `['slack-config']` read Settings > Slack itself renders from, from cache
+  // only: it carries the server's own answer to whether Connections offers the
+  // Slack card (`slack_mcp_card`), which with the saved switch is the page's whole
+  // rule for drawing the Slack tools switch. Withheld only on a successful read
+  // that says neither; until the Slack page has been opened there is no answer.
+  const slackQ = useQuery<SlackConfigData>({ queryKey: ['slack-config'], queryFn: api.getSlackConfig, ...CACHED_ONLY })
+  const slackToolsShown = !slackQ.isSuccess
+    || slackQ.data?.slack_mcp_card === true
+    || slackQ.data?.slack_mcp === true
   // The `['instances']` read RemoteCrewPanel picks its branch by, from cache only:
   // the shell's tab bar already reads it at boot.
   const instancesQ = useQuery({ queryKey: ['instances'], queryFn: () => api.listInstances(), ...CACHED_ONLY })
@@ -68,7 +77,7 @@ export function useSettingsSearchGovernance(
     ? true
     : isInstancesDisabledError(instancesQ.error) ? false : undefined
   return useMemo(
-    () => ({ decisionsEnabled, tipsEnabled, updateSwitches: { app, gateway }, kiroSignInOffered, remoteCrewsEnabled, channelsOn }),
-    [decisionsEnabled, tipsEnabled, app, gateway, kiroSignInOffered, remoteCrewsEnabled, channelsOn],
+    () => ({ decisionsEnabled, tipsEnabled, updateSwitches: { app, gateway }, kiroSignInOffered, remoteCrewsEnabled, channelsOn, slackToolsShown }),
+    [decisionsEnabled, tipsEnabled, app, gateway, kiroSignInOffered, remoteCrewsEnabled, channelsOn, slackToolsShown],
   )
 }

@@ -46,7 +46,11 @@ def fake_switch(monkeypatch: pytest.MonkeyPatch) -> str:
     from kiro_crew import slack_manifest
 
     monkeypatch.setitem(slack_manifest.FEATURE_SCOPES, _FAKE, _FAKE_SCOPE)
-    monkeypatch.setattr(slack_manifest, "FEATURES", tuple(slack_manifest.FEATURE_SCOPES))
+    monkeypatch.setattr(
+        slack_manifest,
+        "FEATURES",
+        (*slack_manifest.FEATURE_SCOPES, slack_manifest.SLACK_MCP),
+    )
     return _FAKE
 
 
