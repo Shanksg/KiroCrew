@@ -49,6 +49,7 @@ import {
   PREVIEW_FLAG_PREFIX,
   PREVIEW_INSTANCE_SESSIONS,
   PREVIEW_REMOTE_CREW_CHAT,
+  PREVIEW_VISUAL_REFRESH,
   PREVIEW_WEBHOOKS,
   PREVIEW_DASHBOARD_STALE_FIELDS,
   PREVIEW_DASHBOARD_STALE_WAKE,
@@ -381,6 +382,7 @@ describe('Settings > Developer > Feature Previews', () => {
     'Explore': true,
     'Mark out-of-date Dashboard fields': true,
     'Send pending approvals to chat apps': true,
+    'Visual refresh': true,
     'Agent Harness for worker chats': true,
     'Session Environments': true,
     'ACP runtime sharing': true,
@@ -659,6 +661,18 @@ describe('Settings > Developer > Feature Previews', () => {
     expect(grill.getAttribute('aria-checked')).toBe('false')
     await act(async () => { grill.click() })
     expect(localStorage.getItem(PREVIEW_WORKER_GRILL)).toBe('1')
+  })
+
+  it('has a Visual refresh switch that starts off and writes only its own key', async () => {
+    expect(readPreviewFlag(PREVIEW_VISUAL_REFRESH)).toBe(false)
+    renderTab()
+    const toggle = () => screen.getByRole('switch', { name: /^visual refresh$/i })
+    expect(toggle().getAttribute('aria-checked')).toBe('false')
+    await act(async () => { toggle().click() })
+    expect(toggle().getAttribute('aria-checked')).toBe('true')
+    const written = Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i) ?? '')
+      .filter(k => k.startsWith(PREVIEW_FLAG_PREFIX))
+    expect(written).toEqual([PREVIEW_VISUAL_REFRESH])
   })
 
   it('reads the retired instance-sessions key as on, and clears it when turned off', async () => {
