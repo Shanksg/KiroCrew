@@ -57,6 +57,7 @@ if TYPE_CHECKING:
         deepseek_policy_alias,
         edit_target_candidates,
         is_edit_call,
+        is_fetch_url_text,
         is_read_only_bash,
         is_sensitive_bash_command,
         is_unverifiable_path_refusal,
@@ -266,6 +267,12 @@ class GateFacts:
         """
         call = self.call
         return call.command if (call.is_shell and call.command and not call.mcp_server) else None
+
+    @property
+    def exempt_url(self) -> str | None:
+        """A title the path rule does not resolve: the proven fetch URL, or ``Fetch <url>``."""
+        title = self.judged_normalized
+        return title if is_fetch_url_text(title, self.call.fetch_url) else None
 
     @property
     def exempt_identity(self) -> str | None:
@@ -605,11 +612,11 @@ def _rule_sensitive_path(facts: GateFacts, target: str) -> str | None:
     tool, not a file, so resolving it as a path is a category error that under a
     resolver stall refused the call fail-closed with a "Path:" wording naming no
     path. Only an exact verified-identity match is spared; any other title, and
-    every argument, stays gated.
+    every argument, stays gated. A proven fetch's URL title is spared too (``exempt_url``).
     """
     return (
         sensitive_path_refusal(target)
-        if target not in (facts.exempt_command, facts.exempt_identity)
+        if target not in (facts.exempt_command, facts.exempt_identity, facts.exempt_url)
         else None
     )
 
