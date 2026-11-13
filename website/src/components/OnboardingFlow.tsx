@@ -568,8 +568,12 @@ export default function OnboardingFlow({
       if (items.length === 0) return
       const first = items[0]
       const last = items[items.length - 1]
-      const wrapsBackward = e.shiftKey && document.activeElement === first
-      const wrapsForward = !e.shiftKey && document.activeElement === last
+      // As in PrivacyChapter, focus that is not on a dialog control (the chat
+      // composer behind the scrim focuses itself when its session loads)
+      // re-enters the dialog; left to the browser, Tab walks the page behind.
+      const activeIndex = items.indexOf(document.activeElement as HTMLElement)
+      const wrapsBackward = e.shiftKey && activeIndex <= 0
+      const wrapsForward = !e.shiftKey && (activeIndex < 0 || activeIndex === items.length - 1)
       // A mid-dialog Tab is the browser's to move, so it is also not the
       // trap's to claim — claiming it would consume legitimate navigation
       // inside the post-composition latch window.

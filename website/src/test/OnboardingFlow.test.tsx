@@ -445,6 +445,30 @@ describe('OnboardingFlow — About You step', () => {
     expect(document.activeElement).not.toBe(first)
   })
 
+  it('a Tab from the page behind the scrim re-enters the dialog, either direction', () => {
+    // The chat composer behind the scrim focuses itself when its session
+    // loads; neither first nor last, so without the re-entry Tab walks the page behind.
+    renderWithProviders(<OnboardingFlow initialOpen onComplete={vi.fn()} />)
+    const dialog = screen.getByRole('dialog')
+    const focusable = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter(el => !el.hasAttribute('disabled') && el.tabIndex >= 0)
+    const behind = document.createElement('textarea')
+    document.body.appendChild(behind)
+    try {
+      behind.focus()
+      fireEvent.keyDown(document, { key: 'Tab' })
+      expect(document.activeElement).toBe(focusable[0])
+      behind.focus()
+      fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+      expect(document.activeElement).toBe(focusable[focusable.length - 1])
+    } finally {
+      behind.remove()
+    }
+  })
+
   it('re-seats focus inside the dialog when the save freeze lifts', async () => {
     // Every step-2 control is disabled during the save, so the browser drops
     // focus to <body>. On the failed-save path the modal stays open, and
