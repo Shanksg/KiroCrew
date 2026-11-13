@@ -148,7 +148,8 @@ without user namespaces (a container), the on-disk file is served as written. Ev
 device reads as removed). It is
 separate from the sibling `write_provenance.py`: that one pins the INODE
 identity for the Linux launcher, this one keeps the CONTENT the loaders parse. The copy is
-always a writer's published bytes, with one exception: the gateway's start endorses each
+always a writer's published bytes, with two exceptions: a pod restart re-floors a pod's copy that
+its `config.json` no longer matches (below), and the gateway's start endorses each
 protected file that has no copy yet (`adopt_unendorsed`), once, after the previous run's
 sessions are swept and before any session of the run, publishing the copy only while none
 exists (a hard link, so a save that endorses the file meanwhile keeps its own copy): only a
@@ -201,10 +202,13 @@ the lock) in a private directory inside the sealed `config-provenance` directory
 before the editor starts while the file is pending, and refuses (keeping the edited copy) when
 the file changed while the editor was open. Like git, it ignores Ctrl-C while it waits for the
 editor (started first, so the editor keeps Ctrl-C), so cancelling an editor's shell command does
-not discard a saved edit. One writer does not endorse: `kirocrew pod`'s seed-floor rewrite of a
-pod's `config.json` (another data home). Where the seal applies and the file already has a copy,
-its result is an outside change like any other: pending until the owner applies it in Settings >
-Security or with `kirocrew config pending`. A reader outside the load decides that a protected file is absent only through
+not discard a saved edit. `kirocrew pod`'s seed and restart rewrite of a
+pod's `config.json` runs in the operator's process, so where the seal applies it endorses in the
+POD's data home through the held pod-home descriptor (`endorsing_at` / `endorsed_copy_at`): it
+floors and publishes the file on every run and endorses the same bytes, except that when the file
+differs from the pod's endorsed copy it endorses that copy floored instead, so a plain restart is
+never pending, a raw edit made in the pod home stays pending across a restart, and both the file (what
+a pod gateway too old to read the copy loads) and the copy carry the floor. A reader outside the load decides that a protected file is absent only through
 `read_endorsed_config_text` / `read_config_for_update` (no `is_file()` / `exists()` check
 first), so a deleted file whose endorsed copy is in force reads as that copy everywhere. The
 pending diff and Apply compare values type-strictly (`strict_json_equal`: `true` is not `1`),
