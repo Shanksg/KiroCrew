@@ -21613,6 +21613,7 @@
         "keeps_running": "Continua a funzionare se lasci questa pagina.",
         "launch": "Avvia",
         "launch_another": "Avvia un’altra crew",
+        "launch_cancelled": "Annullato",
         "launch_done": "Fatto — la tua nuova crew è pronta e ora compare in «Le tue crew».",
         "launch_done_unsigned": "La crew è pronta e compare in Le tue crew, ma Kiro non ha ancora effettuato l’accesso su di essa. Completa l’accesso sopra.",
         "launch_failed_title": "Avvio non riuscito",

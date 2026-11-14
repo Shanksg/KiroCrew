@@ -21613,6 +21613,7 @@
         "keeps_running": "Continua em execução se você sair desta página.",
         "launch": "Lançar",
         "launch_another": "Lançar outra crew",
+        "launch_cancelled": "Cancelado",
         "launch_done": "Pronto — sua nova crew está pronta e agora aparece em “Suas crews”.",
         "launch_done_unsigned": "A crew está pronta e aparece em Suas crews, mas o Kiro ainda não fez login nela. Conclua o login acima.",
         "launch_failed_title": "Falha ao lançar",
