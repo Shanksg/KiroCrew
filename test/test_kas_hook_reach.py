@@ -151,6 +151,14 @@ def test_the_projection_covers_what_each_kind_meets(matcher, covered):
     assert hook_gated_capabilities((matcher,)) == covered
 
 
+def test_a_pipe_matcher_covers_the_union_of_its_alternatives():
+    union = hook_gated_capabilities(("fs_write",)) | hook_gated_capabilities(("execute_bash",))
+    assert hook_gated_capabilities(("fs_write|execute_bash",)) == union
+    assert union != set(HOOK_GATEABLE_CAPABILITIES)
+    # The gate reads a matcher with a glob character whole, so this one is too.
+    assert hook_gated_capabilities(("fs_*|execute_bash",)) == set(HOOK_GATEABLE_CAPABILITIES)
+
+
 # ── P1-5: an @server or wildcard MCP hook asks on that server only ──────────
 
 

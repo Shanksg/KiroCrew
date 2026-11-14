@@ -1040,6 +1040,27 @@ def _tool_matches(pattern: str, tool_name: str) -> bool:
     return fnmatch.fnmatch(tool_name.lower(), pattern.lower())
 
 
+def _hook_matcher_alternatives(matcher: str) -> list[str]:
+    """The patterns a PreToolUse/PostToolUse hook's tool *matcher* stands for.
+
+    ``|`` separates plain tool names: ``fs_write|execute_bash`` stands for both. A
+    matcher holding a glob character or a space stays one pattern: read whole it
+    can meet a call's title, a shell command such as ``*env|grep*``, and split it
+    would stop meeting that title or meet every call.
+    """
+    if any(ch in matcher for ch in " *?["):
+        return [matcher]
+    return [alt for alt in matcher.split("|") if alt]
+
+
+def _hook_tool_matches(matcher: str, tool_name: str) -> bool:
+    """Whether one of *matcher*'s alternatives (:func:`_hook_matcher_alternatives`)
+    meets *tool_name*. Approve, deny and confirm patterns keep :func:`_tool_matches`:
+    there a ``|`` meaning would widen a saved pattern.
+    """
+    return any(_tool_matches(alt, tool_name) for alt in _hook_matcher_alternatives(matcher))
+
+
 def _has_global_inline_flags(pattern: str) -> bool:
     """True when *pattern* starts with a global Python flag directive."""
     return _GLOBAL_INLINE_FLAGS_RE.match(pattern) is not None

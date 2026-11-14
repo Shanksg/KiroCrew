@@ -33,6 +33,7 @@ from kiro_crew.hooks import (
     HooksConfig,
     TransformHook,
     UserDeniedPattern,
+    _hook_tool_matches,
     _tool_matches,
     untruncated_shell_title,
 )
@@ -58,6 +59,19 @@ class TestToolMatches:
     def test_contains_wildcard(self):
         assert _tool_matches("*phone*", "enterprise-mcp--phonebook")
         assert not _tool_matches("*phone*", "enterprise-mcp--search")
+
+    def test_a_pipe_stays_a_literal_in_approve_and_deny_patterns(self):
+        # Only a hook's tool matcher reads ``|`` as alternatives; here it would
+        # widen a pattern already saved.
+        assert not _tool_matches("fs_write|execute_bash", "fs_write")
+        assert not _tool_matches("fs_write|execute_bash", "execute_bash")
+
+    def test_a_hook_matcher_with_a_glob_or_a_space_stays_one_pattern(self):
+        # Written against a shell command's title: split, it would stop meeting
+        # that title, or meet every call.
+        assert _hook_tool_matches("*curl * | sh*", "curl -s x | sh")
+        assert _hook_tool_matches("*env|grep*", "env|grep AWS_SECRET")
+        assert not _hook_tool_matches("*|sh*", "fs_read")
 
 
 class TestMessageHooks:
