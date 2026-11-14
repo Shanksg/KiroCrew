@@ -1356,6 +1356,7 @@ if TYPE_CHECKING:  # every owner-defined name in _EXPORTS, for type checkers and
         _canonical_ip,
         _expand,
         _looks_like_host,
+        _Marker,
         _match_command,
         _match_denied_path,
         _match_host,
