@@ -159,3 +159,68 @@ def test_merge_never_prints_the_replace_notice(home, tmp_path, capsys):
     out = capsys.readouterr().out
     assert rc == 0, out
     assert SECOND_LINE not in out and "Kept your live" not in out, out
+
+
+def test_a_missing_live_file_is_installed_and_the_second_line_is_printed(home, tmp_path, capsys):
+    rc = snap.restore_main(_replace(_bundle(tmp_path)))
+
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "will be installed" in out and "disabled or paused" in out, out
+    for name in SETTINGS:
+        assert name in out, out
+    assert SECOND_LINE in out, out
+    assert "Kept your live" not in out, out
+
+
+def test_dry_run_names_the_documents_it_would_install_and_writes_nothing(home, tmp_path, capsys):
+    rc = snap.restore_main(_replace(_bundle(tmp_path), "--dry-run"))
+
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "will be installed" in out and SECOND_LINE in out, out
+    assert not (home / "config.json").exists()
+
+
+def test_only_the_missing_documents_are_named_as_installed_when_some_exist(home, tmp_path, capsys):
+    (home / "config.json").write_text(json.dumps(LIVE), encoding="utf-8")
+
+    rc = snap.restore_main(_replace(_bundle(tmp_path), "--dry-run"))
+
+    out = capsys.readouterr().out
+    assert rc == 0, out
+    assert "keeps this install's live config.json." in out, out
+    assert "no config.local.json, hooks.json" in out, out
+    assert SECOND_LINE in out, out
+
+
+_REPLACE_HELPERS = ("_do_replace", "_do_replace_mutations", "_backup_and_copy")
+
+
+def test_every_production_caller_of_the_replace_helpers_passes_the_flag_explicitly():
+    """A caller that forgets the flag must not silently choose for the user."""
+    import ast
+
+    root = Path(snap.__file__).parent
+    seen = 0
+    missing = []
+    for path in sorted(root.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name in _REPLACE_HELPERS:
+                seen += 1
+                if not any(kw.arg == "include_settings" for kw in node.keywords):
+                    missing.append(f"{path.name}:{node.lineno} {name}")
+    assert seen >= 4, "the scan found no callers; it would pass for the wrong reason"
+    assert missing == []
+
+
+@pytest.mark.parametrize("name", _REPLACE_HELPERS)
+def test_the_replace_helpers_keep_the_live_settings_by_default(name):
+    import inspect
+
+    param = inspect.signature(getattr(snap, name)).parameters["include_settings"]
+    assert param.default is False

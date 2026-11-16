@@ -360,7 +360,9 @@ class TestReplaceRestoresEverySettingsDocument:
         live.update("system.heartbeat", muted=False)
         old_config = (target / "config.json").read_bytes()
 
-        summary = portability.apply_import_zip(zip_path, mode="replace", channel_settings=live)
+        summary = portability.apply_import_zip(
+            zip_path, mode="replace", channel_settings=live, include_settings=True
+        )
 
         config = json.loads((target / "config.json").read_text(encoding="utf-8"))
         assert config["timezone"] == "Asia/Tokyo"
@@ -400,7 +402,9 @@ class TestReplaceRestoresEverySettingsDocument:
         zip_path = _export(_source_home(tmp_path), monkeypatch, tmp_path)
         target = _fresh_install(tmp_path, monkeypatch)
 
-        portability.apply_import_zip(zip_path, mode="replace", channel_settings=ChannelSettings())
+        portability.apply_import_zip(
+            zip_path, mode="replace", channel_settings=ChannelSettings(), include_settings=True
+        )
 
         for name in ("config.json", "config.local.json", "ui-prefs.json"):
             mode = stat.S_IMODE((target / name).stat().st_mode)

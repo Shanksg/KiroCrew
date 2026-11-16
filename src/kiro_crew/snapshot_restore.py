@@ -57,6 +57,7 @@ from kiro_crew.snapshot_components import (
     COMPONENTS,
     CORE_FILES,
     CORE_FILES_FLAT,
+    SETTINGS_PICK_FILES,
     UnsafeComponentRoot,
     _facade,
     _want,
@@ -314,6 +315,44 @@ def _components_absent_from_bundle(snap: Path, names: list[str]) -> list[str]:
     return absent
 
 
+def _keeps_live_settings(mc: Path, f: str, include_settings: bool) -> bool:
+    """True when Replace leaves the live settings document *f* alone.
+
+    Only an EXISTING live file is kept; a name with nothing at it is still filled from the
+    archive, so a fresh machine restores as before.
+    """
+    return not include_settings and f in SETTINGS_PICK_FILES and os.path.lexists(mc / f)
+
+
+def _settings_kept_by_replace(
+    snap: Path, mc: Path, components: list[str] | None, include_settings: bool
+) -> list[str]:
+    """The settings documents the archive carries that a Replace will leave in place."""
+    if not _want(components, "config"):
+        return []
+    return [
+        f
+        for f in SETTINGS_PICK_FILES
+        if (snap / f).is_file() and _keeps_live_settings(mc, f, include_settings)
+    ]
+
+
+def _settings_installed_by_replace(
+    snap: Path, mc: Path, components: list[str] | None, include_settings: bool
+) -> list[str]:
+    """The settings documents the archive carries that a Replace will install.
+
+    Those are the picked ones and the ones whose live file is absent.
+    """
+    if not _want(components, "config"):
+        return []
+    return [
+        f
+        for f in SETTINGS_PICK_FILES
+        if (snap / f).is_file() and not _keeps_live_settings(mc, f, include_settings)
+    ]
+
+
 def _backup_and_copy(
     mc: Path,
     backup: Path,
@@ -322,6 +361,7 @@ def _backup_and_copy(
     *,
     allow_unpinned: bool = False,
     installed: set[str] | None = None,
+    include_settings: bool = False,
 ) -> None:
     """Move the live core files aside, then restore the archive's, destination pinned.
 
@@ -347,6 +387,8 @@ def _backup_and_copy(
             if not (snap / f).is_file() or pinned_fs.is_reparse_point(snap / f):
                 if (snap / f).exists():
                     print(f"⚠️  Skipping symlinked file from snapshot: {snap / f}")
+                continue
+            if _keeps_live_settings(mc, f, include_settings):
                 continue
             # Past the skip, so this file WILL be mutated. Recorded now, before the move
             # below, so a crash mid-write still leaves the name known to have been reached
@@ -395,6 +437,8 @@ def _backup_and_copy(
                     # restored, reported as success. Asked through src_fd so a snapshot
                     # root swapped after pinning cannot redirect the check.
                     if not pinned_fs.is_regular_at(src_fd, f):
+                        continue
+                    if _keeps_live_settings(mc, f, include_settings):
                         continue
                     # Same point as the fallback branch: past the skip, so this file is
                     # about to be mutated and is recorded BEFORE the move. A file the
@@ -853,7 +897,12 @@ def _discard_partial_rollback(*dirs: Path | None) -> None:
 
 
 def _do_replace(
-    snap: Path, mc: Path, components: list[str] | None, *, allow_unpinned: bool = False
+    snap: Path,
+    mc: Path,
+    components: list[str] | None,
+    *,
+    allow_unpinned: bool = False,
+    include_settings: bool = False,
 ) -> None:
     """Replace the selected components, with a complete rollback set taken first.
 
@@ -1027,6 +1076,7 @@ def _do_replace(
                     mem_roots,
                     installed,
                     allow_unpinned=allow_unpinned,
+                    include_settings=include_settings,
                 )
         except BaseException as e:
             # `BaseException`, not `Exception`: `PinnedPathRefusal` and `KeyboardInterrupt`
@@ -1167,6 +1217,7 @@ def _do_replace_mutations(
     installed: set[str],
     *,
     allow_unpinned: bool = False,
+    include_settings: bool = False,
 ) -> None:
     """Every mutation replace mode performs, so one handler can revert all of them.
 
@@ -1185,7 +1236,13 @@ def _do_replace_mutations(
     for comp in _CORE_FILE_COMPONENTS:
         if _want(components, comp):
             facade._backup_and_copy(
-                mc, backup, snap, comp, allow_unpinned=allow_unpinned, installed=installed
+                mc,
+                backup,
+                snap,
+                comp,
+                allow_unpinned=allow_unpinned,
+                installed=installed,
+                include_settings=include_settings,
             )
             print(f"  ✅ {comp}")
 
