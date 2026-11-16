@@ -165,7 +165,14 @@ _MOVED: dict[str, tuple[str, ...]] = {
         _resolved_kiro_agents_targets _PACKAGED_INSTALL_DIR_NAMES install_root_targets_for
         _install_root_targets_with _install_root_targets_cached _resolved_install_root_targets
         _bundled_kas_targets_cached _bundled_kiro_cli_targets_cached _bundled_root_spellings
-        _gateway_package_dir _APP_BACKEND_OWNED_LEAVES app_backend_visible_targets
+        _gateway_package_dir _interpreter_env_targets_cached _resolved_interpreter_env_targets
+        _interpreter_link_paths_cached _resolved_interpreter_link_paths _prefix_seal_entries
+        _PREFIX_OTHER_ENVS _conda_seal_dirs _sealable_spellings _env_scan
+        _broad_user_dir
+        _pth_dirs _gateway_start_sys_path
+        _search_path_spellings _nearest_existing _writable_or_owned _is_within _never_sealed
+        prime_interpreter_env_seal
+        _APP_BACKEND_OWNED_LEAVES app_backend_visible_targets
         app_declared_mask_targets app_declared_readonly_targets _liftable_declared_file
         _liftable_declared_dir
         crew_home_visible_spellings carveout_chain_has_planted_link

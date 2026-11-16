@@ -575,6 +575,21 @@ def _fresh_update_ownership(_floor_monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_safe_path_reexec(_floor_monkeypatch):
+    """A gateway dispatch under test must not re-exec pytest with PYTHONSAFEPATH set.
+
+    ``service.common.reexec_with_safe_path`` replaces the process on a foreground
+    start without safe_path, which is every pytest run. Its own tests patch
+    ``os.execve`` and call the original, kept as ``_reexec_with_safe_path_original``.
+    """
+    from kiro_crew.service import common
+
+    original = common.reexec_with_safe_path
+    _floor_monkeypatch.setattr(common, "reexec_with_safe_path", lambda: None)
+    _floor_monkeypatch.setattr(common, "_reexec_with_safe_path_original", original, raising=False)
+
+
+@pytest.fixture(autouse=True)
 def _krb5_keyring_check_done(_floor_monkeypatch):
     """Mark the once-per-process KEYRING ccache check as already run, for every test.
 

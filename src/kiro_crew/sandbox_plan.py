@@ -97,6 +97,11 @@ class SandboxRequest:
     #: mask simply does not set this. False by default, so a spawn seals nothing unless
     #: it asks.
     seal_hidden_dirs: bool = False
+    #: Leave the gateway's interpreter environment (``sandbox_tiers.
+    #: _resolved_interpreter_env_targets``) out of the read-only seals for this spawn;
+    #: the ``kiro_crew`` package directory stays sealed. Only a gateway-initiated
+    #: install with a fixed argv sets it; no config key or tool argument maps to it.
+    gateway_env_writable: bool = False
     extra_hidden_dir_ids: tuple[tuple[str, int, int], ...] = ()
     extra_alias_credential_ids: tuple[tuple[int, int], ...] = ()
     extra_visible_dirs: tuple[str, ...] = ()

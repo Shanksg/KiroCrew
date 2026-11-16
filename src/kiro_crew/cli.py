@@ -723,6 +723,9 @@ def main() -> None:
     # the install the user typed, not a worktree someone made live.
     if args.command == "gateway":
         _refuse_unpersistable_data_home()
+        from kiro_crew.service.common import reexec_with_safe_path
+
+        reexec_with_safe_path()  # foreground start: keep the script dir off sys.path
         maybe_reexec(sys.argv[1:])
 
     # ``gateway --seed <fixture>`` runs BEFORE ``KiroCrewConfig.load()`` and the

@@ -75,3 +75,30 @@ def test_a_direct_site_packages_install_is_sealed_without_refusal(tmp_path: Path
         and call.target_id == (package_stat.st_dev, package_stat.st_ino)
         for call in libc.calls
     )
+
+
+def test_the_interpreter_env_and_the_package_are_sealed_without_refusal(tmp_path: Path) -> None:
+    # The managed layout again, now with the venv itself and a base Python both sealed:
+    # every spelling, the linked one included, is bound and remounted read-only.
+    lexical, versioned = _managed_venv(tmp_path)
+    base = tmp_path / "python" / "3.12.13"
+    (base / "lib" / "python3.12").mkdir(parents=True)
+    current = tmp_path / "crew-venv-current"
+    env = sandbox._interpreter_env_targets_cached.__wrapped__(
+        str(lexical), (str(current), str(base)), (), (), ("/nonexistent-home",)
+    )
+    assert env == (str(current), str(tmp_path / "crew-venv-2"), str(base))
+    targets = [*env, *sandbox._install_root_targets_cached.__wrapped__(str(lexical))]
+
+    libc = RecordingLibc()
+    run = launch(tmp_path, payload(readonly_dirs=targets), libc=libc)
+    assert refusal(program.seal_readonly, run) is None
+
+    sealed = {
+        call.target_id
+        for call in libc.calls
+        if call.flags & _MS_REMOUNT and call.flags & _MS_RDONLY
+    }
+    for path in (tmp_path / "crew-venv-2", base, versioned):
+        st = os.stat(path)
+        assert (st.st_dev, st.st_ino) in sealed, path

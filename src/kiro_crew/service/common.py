@@ -163,6 +163,19 @@ def _running_install_bin() -> str | None:
     return str(sibling)
 
 
+def reexec_with_safe_path() -> None:
+    """Restart this process with ``PYTHONSAFEPATH=1`` when it lacks it (POSIX only).
+
+    A foreground ``kirocrew gateway`` from a --user install has ``~/.local/bin`` as
+    ``sys.path[0]``; after this the script directory is off the import path, as it is
+    for the service. shortcut: imports before this call still searched it.
+    """
+    if sys.flags.safe_path or os.name != "posix" or not getattr(sys, "orig_argv", None):
+        return
+    env = {**os.environ, "PYTHONSAFEPATH": "1"}
+    os.execve(sys.executable, [sys.executable, *sys.orig_argv[1:]], env)
+
+
 def service_environment(home: str) -> "dict[str, str]":
     """Build the environment baked into the installed service.
 
@@ -174,6 +187,7 @@ def service_environment(home: str) -> "dict[str, str]":
     Keys:
 
     * ``HOME`` / ``PATH`` — always set; ``PATH`` per :func:`service_path`.
+    * ``PYTHONSAFEPATH`` — ``1``, so the script directory is not on ``sys.path``.
     * ``LANG`` / ``LC_ALL`` — a fixed UTF-8 locale, so a subprocess reading a
       non-ASCII file does not fail under ``US-ASCII`` (launchd sets no locale).
       Not the installer's own: a ``LANG=C`` install would bake a non-UTF-8
@@ -198,6 +212,10 @@ def service_environment(home: str) -> "dict[str, str]":
         # background service. Older definitions without it are diagnosed by
         # ``kirocrew doctor`` and regenerated with ``kirocrew service install``.
         "KIROCREW_SERVICE_MANAGED": "1",
+        # The console script's own directory (``~/.local/bin`` for a --user
+        # install) is not put first on sys.path, so it is not part of the
+        # gateway's import path and stays writable to the agent.
+        "PYTHONSAFEPATH": "1",
     }
     kiro_bin = os.environ.get("KIROCREW_KIRO_BIN", "").strip()
     if kiro_bin:
