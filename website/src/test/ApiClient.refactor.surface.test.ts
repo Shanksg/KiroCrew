@@ -26,7 +26,7 @@ const API_KEY_ORDER = [
   'status', 'tunnelStatus', 'system', 'leakedRuntimes', 'reclaimLeakedRuntimes', 'sessionStorage',
   'sessionStorageCleanup', 'sessionStorageRestore', 'sessionStorageEmpty', 'sessionStorageEmptyStatus',
   'sessionInventory', 'sessionInventoryDetail', 'sessionInventoryTrash', 'reportUiControlClick', 'sessionCrewLogProjections', 'sessionWorkProjection',
-  'telemetryStartup', 'telemetryContextTrace', 'telemetryContextTurn', 'usageTurns', 'usageSeries',
+  'telemetryStartup', 'telemetryContextTrace', 'telemetryContextTurn', 'telemetryPromptAsSent', 'usageTurns', 'usageSeries',
   'wakatimeStats', 'wakatimeExportUrl', 'wakatimeOauthStatus', 'wakatimeOauthAuthorize', 'wakatimeOauthDisconnect',
   'crewBoard', 'crewBoardAction', 'wakatimeExportDownload',
   'sessionSummary', 'dashboardCard', 'generateSessionSummary',

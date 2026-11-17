@@ -1040,4 +1040,11 @@ _GATEWAY_SINKS: tuple[tuple[str, str, str], ...] = (
         "because an operator can paste a token into the list. The login words "
         "beside them are fixed constants.",
     ),
+    (
+        "The prompt a turn sent",
+        "dashboard/handlers/prompt_as_sent.py",
+        "The Context tab's prompt as sent: the text one turn sent the agent, read from "
+        "the in-memory prompt record, passes the exfiltration-URL and credential "
+        "redactors before it reaches the owner's browser.",
+    ),
 )
