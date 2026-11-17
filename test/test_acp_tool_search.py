@@ -211,6 +211,9 @@ class TestApplyToolSearchOverlay:
         with caplog.at_level(logging.WARNING, logger="kiro_crew.providers.acp"):
             provider = AcpProvider(acp_backend="", work_dir=tmp_path, tool_search=True)
             monkeypatch.setattr(provider, "_start_kiro_runtime", AsyncMock())
+            # Without this, start() asks a real client for /mcp and can launch
+            # an installed kiro-cli.
+            monkeypatch.setattr(provider, "_note_zero_tool_servers", AsyncMock())
             await provider.start()
 
         assert cli.read_bytes() == contents
