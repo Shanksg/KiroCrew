@@ -62,6 +62,9 @@ _stored: dict[str, dict[str, Any]] = {}
 #: Per root, per field (``stopped``, ``owed``), the owed turns the pause file
 #: refused (:func:`owe_turn`): in memory only, never in :data:`_stored`.
 _memory_only: dict[str, dict[str, list[str]]] = {}
+#: Same shape: owed turns that were memory only and a later write stored. A write
+#: the size cap would refuse puts them back in :data:`_memory_only` first.
+_spilled: dict[str, dict[str, list[str]]] = {}
 #: Per root, the stopped members of a record a Resume all dropped, until their
 #: hand-backs finish: a turn its dispatch gate ends meanwhile is still continued
 #: by that Resume. Stored with the records, so a restart does not lose them.
@@ -123,7 +126,7 @@ def _fold_resuming(
 
 def _ensure_loaded() -> None:
     """Load the file once per data home. Caller holds ``_lock``."""
-    global _loaded_from
+    global _loaded_from, _spilled
     path = _path()
     if _loaded_from == path:
         return
@@ -140,6 +143,7 @@ def _ensure_loaded() -> None:
         logger.warning("crew pause: could not read %s; no crew is paused", path, exc_info=True)
     # The file's ``resuming`` stays until the next write, which stores the
     # records it was folded into instead.
+    _spilled = {}
     _publish(records, {}, {})
     _loaded_from = path
 
@@ -231,6 +235,7 @@ def _commit(
     published after: a write that fails raises with the live state unchanged,
     so memory and the file never disagree.
     """
+    global _unsaved, _spilled
     if resuming is None:
         resuming = _resuming
     memory_only = _prune(_memory_only if memory_only is None else memory_only, records)
@@ -242,6 +247,15 @@ def _commit(
             records, memory_only = merged, {}
     if body is None:
         body = _body(records, resuming)
+    # Owed turns the file once refused and holds now: a later write took room an
+    # undo was counting on (another crew's Continue landing while this one's is
+    # decided). The write the cap would refuse puts them back in memory only.
+    spilled = _present(_union(_spilled, _memory_only), records)
+    if body is None and spilled:
+        trimmed = _without(records, spilled)
+        body = _body(trimmed, resuming)
+        if body is not None:
+            records, memory_only, spilled = trimmed, _union(memory_only, spilled), {}
     if body is None:
         # The loader ignores a bigger file as damaged, so writing one would drop
         # every stored pause at the next restart: refuse it, live state unchanged.
@@ -249,8 +263,8 @@ def _commit(
     path = _path()
     path.parent.mkdir(parents=True, exist_ok=True)
     atomic_write(path, body, mode=0o600, restrict_to_owner=True, newline="\n")
-    global _unsaved
     _unsaved = False
+    _spilled = spilled
     _publish(records, resuming, memory_only)
 
 
@@ -264,7 +278,8 @@ def _publish(
     Caller holds ``_lock``. A new object replaces the old one, which readers may
     still be reading. A memory-only turn whose record is gone goes with it.
     """
-    global _records, _stored, _resuming, _memory_only
+    global _records, _stored, _resuming, _memory_only, _spilled
+    _spilled = _present(_spilled, records)
     _stored = records
     _memory_only = _prune(_memory_only if memory_only is None else memory_only, records)
     _records = _merge(records, _memory_only) if _memory_only else records
@@ -306,6 +321,52 @@ def _merge(
         rec = dict(out[root])
         for field, keys in fields.items():
             rec[field] = sorted(set(rec.get(field) or []) | set(keys))
+        out[root] = rec
+    return out
+
+
+def _union(
+    a: dict[str, dict[str, list[str]]], b: dict[str, dict[str, list[str]]]
+) -> dict[str, dict[str, list[str]]]:
+    """A new map of turns: every root, field and key in *a* or *b*."""
+    out = {root: {f: list(keys) for f, keys in fields.items()} for root, fields in a.items()}
+    for root, fields in b.items():
+        mine = out.setdefault(root, {})
+        for field, keys in fields.items():
+            mine[field] = sorted(set(mine.get(field) or []) | set(keys))
+    return out
+
+
+def _present(
+    turns: dict[str, dict[str, list[str]]], records: dict[str, dict[str, Any]]
+) -> dict[str, dict[str, list[str]]]:
+    """The part of *turns* that *records* stores, by root and field."""
+    out: dict[str, dict[str, list[str]]] = {}
+    for root, fields in turns.items():
+        stored = records.get(root)
+        if stored is None:
+            continue
+        kept = {
+            field: both
+            for field, keys in fields.items()
+            if (both := sorted(set(keys) & set(stored.get(field) or [])))
+        }
+        if kept:
+            out[root] = kept
+    return out
+
+
+def _without(
+    records: dict[str, dict[str, Any]], turns: dict[str, dict[str, list[str]]]
+) -> dict[str, dict[str, Any]]:
+    """A new map: *records* with *turns* taken out of their fields."""
+    out = dict(records)
+    for root, fields in turns.items():
+        if root not in out:
+            continue
+        rec = dict(out[root])
+        for field, keys in fields.items():
+            rec[field] = [k for k in rec.get(field) or [] if k not in keys]
         out[root] = rec
     return out
 
