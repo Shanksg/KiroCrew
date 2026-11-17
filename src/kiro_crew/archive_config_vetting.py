@@ -56,6 +56,15 @@ def _dir_outside_roots(raw: str, roots: list[str]) -> bool:
     return not any(path_within(normal, os.path.normcase(root)) for root in roots)
 
 
+def _is_data_home(raw: str) -> bool:
+    """Whether workspace folder *raw* is exactly the data home (a relative one anchors under it)."""
+    from kiro_crew.config.paths import config_dir
+
+    home = os.path.realpath(config_dir())
+    folder = os.path.realpath(os.path.join(home, os.path.expanduser(raw)))
+    return os.path.normcase(folder) == os.path.normcase(home)
+
+
 def config_document_refusal(data: Any) -> str | None:
     """Why the parsed archive ``config.json`` *data* must not be installed, or ``None``.
 
@@ -79,4 +88,6 @@ def config_document_refusal(data: Any) -> str | None:
             raw = entry.get("dir") if isinstance(entry, dict) else entry
             if isinstance(raw, str) and raw and _dir_outside_roots(raw, roots):
                 return f"workspace {_shown(str(name))} places its folder outside the workspace root"
+            if isinstance(raw, str) and raw and _is_data_home(raw):
+                return f"workspace {_shown(str(name))} places its folder on the data home itself"
     return None
