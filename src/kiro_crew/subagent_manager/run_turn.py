@@ -48,7 +48,6 @@ if TYPE_CHECKING:
         EVENT_TOOL_CALL,
         EVENT_TOOL_RESULT,
         FALLBACK_CANDIDATE_ATTEMPTS,
-        FALLBACK_STORY_ATTR,
         HOOK_EVENT_POST_TOOL_USE,
         STOP_CLASS_CANCELLED,
         TERMINAL_TOOL_STATUSES,
@@ -68,10 +67,12 @@ if TYPE_CHECKING:
         _validate_agent,
         _vet_spawn_governance,
         acp_error_is_transient,
+        advance_fallback_after_activity,
         advance_fallback_candidate,
         agent_dir_for_display,
         annotate_model_fallback,
         apply_completion_keep,
+        attach_fallback_story,
         classify_stop_reason,
         configured_fallback_chain,
         evict_completed_agents,
@@ -738,7 +739,8 @@ async def _run_inner_impl(
         # ``_posttoken_retry_used`` rule (_on_acp_posttoken_transient, chat_turn/acp_recovery.py):
         # each continuation turn issued AFTER observed activity is an
         # independent opportunity for the model to repeat a side-effecting
-        # tool, so post-activity recovery gets exactly ONE attempt.
+        # tool, so post-activity recovery gets exactly ONE attempt per model (a
+        # capacity or throttle error after it moves to the next fallback).
         # TRANSIENT_RETRIES applies only while zero activity was observed
         # (replaying the bare prompt is side-effect-free by definition).
         # PARITY NOTE: this ladder and chat_runner's are two copies with
@@ -954,6 +956,17 @@ async def _run_inner_impl(
                     _kept_after_generate_failure = True
                     logger.warning("Subagent %s: kept output after a transient error", info.id)
                     return
+                # The one continue is spent too: a capacity or throttle error moves the
+                # live session to the next fallback. Its continue takes the in-turn retry
+                # below (event, audit record), never the coordinator: this error's scope
+                # is the primary's, which the session has just left.
+                _swapped = _had_activity and post_activity_attempts >= 1
+                if _swapped:
+                    if not await advance_fallback_after_activity(
+                        client, _fb_state, exc, surface="subagent", log_suffix=f", id={info.id}"
+                    ):
+                        raise
+                    post_activity_attempts = 0
                 # A failure an adapter recognises as a DEPENDENCY condition
                 # (provider throttle, 5xx, connection loss: taskq.dependency)
                 # is not retried here: the run reports it to the per-scope
@@ -965,10 +978,8 @@ async def _run_inner_impl(
                 # (``None``: nothing records its wait and nothing else owns
                 # its work). A row another owner holds, a row that ended,
                 # or a store that cannot say stops the run (``False``).
-                _signal = classify_exception(exc) if _dep_coordinator is not None else None
+                _signal = classify_exception(exc) if _dep_coordinator and not _swapped else None
                 if _signal is not None and not _signal.terminal:
-                    if _had_activity and post_activity_attempts >= 1:
-                        raise
                     _parked = await self._manager._yield_for_dependency(info, _signal)
                     if _parked is False:
                         raise
@@ -980,8 +991,6 @@ async def _run_inner_impl(
                             msg = full_message
                         continue
                 if _had_activity:
-                    if post_activity_attempts >= 1:
-                        raise
                     post_activity_attempts += 1
                 elif attempts >= TRANSIENT_RETRIES:
                     # ── Throttle-exhaustion fallback chain ──
@@ -1001,20 +1010,7 @@ async def _run_inner_impl(
                             log_suffix=f", id={info.id}",
                         )
                         if _cand is None:
-                            _story = _fb_state.exhaustion_story()
-                            if _story:
-                                logger.warning(
-                                    "model fallback: chain exhausted (%s) for "
-                                    "subagent %s; surfacing original error",
-                                    _story,
-                                    info.id,
-                                )
-                                try:
-                                    setattr(exc, FALLBACK_STORY_ATTR, _story)
-                                except Exception:
-                                    # An exception type that refuses attributes cannot carry the
-                                    # story.
-                                    pass
+                            attach_fallback_story(exc, _fb_state, log_suffix=f", id={info.id}")
                             raise
                     _fb_delay = transient_retry_delay(1)
                     await self._manager._fire_event(

@@ -896,6 +896,108 @@ async def test_throttle_fallback_story_survives_a_verbose_error():
     assert info.error.endswith("[primary-model throttled; fallbacks fb-1 also unavailable]")
 
 
+def _post_activity_failure(error: Exception, chain: tuple[str, ...]):
+    """A run that streams on the primary, then fails with *error* on every primary prompt."""
+    calls: list[tuple[str, str]] = []
+    holder: dict[str, object] = {}
+
+    def stream_factory(msg: str, *a, **kw):
+        calls.append((holder["provider"]._model, msg))
+
+        async def _gen():
+            if holder["provider"]._model == "primary-model":
+                if len(calls) == 1:
+                    yield _text_event("partial ")
+                raise error
+            yield _text_event("finished")
+            yield _complete_event()
+
+        return _gen()
+
+    sessions = _mock_sessions(stream_factory)
+    provider = sessions._provider
+    holder["provider"] = provider
+    provider.available_models = MagicMock(return_value=[{"modelId": "fb-1"}])
+    provider.served_model = "primary-model"
+    provider._model = "primary-model"
+
+    async def _move(model_id):
+        provider._model = model_id
+        provider.served_model = model_id
+
+    provider.set_model = AsyncMock(side_effect=_move)
+    patches = (
+        patch("kiro_crew.subagent.transient_retry_delay", return_value=0.0),
+        patch("kiro_crew.subagent.configured_fallback_chain", return_value=chain),
+    )
+    return _manager(sessions), provider, calls, patches
+
+
+def _throttle_error(*, throttle: bool) -> AcpError:
+    err = AcpError("model is unavailable on the backend" if throttle else "backend 500")
+    err.transient = True
+    err.throttle = throttle
+    return err
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("coordinated", [True, False], ids=["coordinator", "in-turn-ladder"])
+async def test_post_activity_throttle_after_the_continue_moves_to_the_fallback(coordinated):
+    """The one continue is spent and the primary still throttles: the chain advances
+    and the candidate continues the turn on the same session, never a replay. Only the
+    primary's continue may park on the dependency coordinator; the candidate's takes the
+    in-turn retry with its event and audit record, never the primary's scope schedule."""
+    mgr, provider, calls, (p1, p2) = _post_activity_failure(
+        _throttle_error(throttle=True), ("fb-1",)
+    )
+    if not coordinated:
+        mgr.dependency_coordinator_async = AsyncMock(return_value=None)
+    events: list[str] = []
+    _orig_fire = mgr._fire_event
+
+    async def _spy(etype, info, extra=None):
+        events.append(etype)
+        await _orig_fire(etype, info, extra)
+
+    mgr._fire_event = _spy
+    sel = MagicMock()
+    with p1, p2:
+        info = await _spawn_and_wait(mgr, sel=sel)
+
+    assert info.error == ""
+    provider.set_model.assert_awaited_once_with("fb-1")
+    assert calls == [
+        ("primary-model", "built_message"),
+        ("primary-model", _TRANSIENT_CONTINUE_MSG),
+        ("fb-1", _TRANSIENT_CONTINUE_MSG),
+    ]
+    assert "partial" in info.result and "finished" in info.result
+    assert events.count("subagent_waiting") == (1 if coordinated else 0)
+    assert events.count("subagent_retrying") == (1 if coordinated else 2)
+    audited = [c.kwargs.get("operation") for c in sel.return_value.log_api_access.call_args_list]
+    assert audited.count("subagent.transient_retry") == (1 if coordinated else 2)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "throttle, chain",
+    [(True, ()), (False, ("fb-1",))],
+    ids=["throttle-without-a-chain", "plain-5xx-with-a-chain"],
+)
+async def test_post_activity_failure_after_the_continue_still_raises(throttle, chain):
+    """No chain, or an error another model would not fix: one continue, then the error."""
+    mgr, provider, calls, (p1, p2) = _post_activity_failure(
+        _throttle_error(throttle=throttle), chain
+    )
+    with p1, p2:
+        info = await _spawn_and_wait(mgr)
+
+    assert info.done is True
+    assert info.error
+    provider.set_model.assert_not_awaited()
+    assert [m for _, m in calls] == ["built_message", _TRANSIENT_CONTINUE_MSG]
+
+
 @pytest.mark.asyncio
 async def test_non_transient_error_fails_immediately():
     calls: list[str] = []
