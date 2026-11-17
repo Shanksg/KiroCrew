@@ -1272,7 +1272,14 @@ whole-document `KiroCrewConfig.save()` refuses to publish a snapshot of a file
 it could not read (see its API entry). Two explicit, user-invoked paths replace
 the document instead: `kirocrew config set --file` installs the given file
 whole (under the same lock, with `on_corrupt="reset"`, so it also overwrites an
-unreadable file), and the dashboard import's **Replace** installs the archive's
+unreadable file; the reset keeps the unreadable bytes in `<file>.unreadable`,
+owner-only because the file can hold inline credentials and replaced by each later
+reset that lands. They are staged beside it and take that name only after the new
+document is written, so a write the publish floor refuses leaves the earlier copy
+alone and logs nothing; a landed reset logs a WARNING naming the file, the parse
+error and the copy, and a copy that cannot be staged refuses with the
+`ConfigReadError` —
+`.bak` stays the migration's copy of a valid file), and the dashboard import's **Replace** installs the archive's
 `config.json`. `--file --local` installs the given file as the overlay
 (`config.local.json`), not the base, and is not meta-stamped; like a base
 `--file` write it refuses a new or changed workspace `dir` that is not an existing
@@ -3265,7 +3272,19 @@ applier and no `current()` reader ever sees the all-defaults document the
 loader answers for an unparseable file (a forum activation of `always`, an
 empty allow-list, for the length of the tear). Once the file parses again the
 load is adopted as it is, still flagged, and a repair to new values diffs and
-dispatches them. A load that *succeeds degraded* with the file parseable (a
+dispatches them. The person who saved the torn file is told: the WARNING names
+each torn file with the parser's line and column, and the watcher hands the same
+sentences to `ConfigWatch.tear_reporter`, which the gateway points at
+`notifications/config_parse_note.py`. That keeps one critical `system.agent` bell
+note keyed `config-syntax-error` saying the settings already in force stay and the
+saved edit is not applied. The fingerprint is recorded after a torn read, so the
+report runs once per distinct save; the same error saved again rings nothing new,
+a different one replaces the note, and a read adopted whole removes it. The first
+adopted read of a process always reports, so a note stored before a restart is
+removed when the file was repaired while no gateway ran. A report whose bell change
+is not stored raises, stays unsent, and is retried on every tick, unchanged ones
+included. No text from the file is quoted, and the file is never touched. A
+load that *succeeds degraded* with the file parseable (a
 section the loader itself discarded, named in `degraded_sections`) does
 dispatch: the watcher does not refuse on the applier's behalf, because whether
 a default is safe is a property of the consumer. A fail-closed applier — every
