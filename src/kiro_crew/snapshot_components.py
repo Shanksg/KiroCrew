@@ -123,6 +123,9 @@ class ComponentSpec:
     help: str
     files: tuple[str, ...] = ()
     trees: tuple[str, ...] = ()
+    #: Entries of ``files`` that name paths on the machine that made the bundle. They ride
+    #: a bundle, but a restore never installs them: this install's copy is the right one.
+    host_local: tuple[str, ...] = ()
 
 
 # The single source of truth for what a bundle can contain. Both the staging path
@@ -177,6 +180,9 @@ COMPONENTS: dict[str, ComponentSpec] = {
             "project_dir",
             "workspace_dir",
         ),
+        # `workspace_dir` roots every session work directory, outbox and upload root;
+        # `session_map.json` holds the folder a resumed session starts in.
+        host_local=("session_map.json", "workspace_dir"),
     ),
     "skills": ComponentSpec(
         policy=SecretPolicy.UNRESOLVED,

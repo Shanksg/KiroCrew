@@ -196,6 +196,11 @@ def _do_merge(
             s, d = snap / f, mc / f
             if not s.is_file():
                 continue
+            if f in COMPONENTS["config"].host_local:
+                # Paths on the machine that made the bundle: never installed, even where
+                # this install has no copy. Silent, like host runtime state a merge keeps:
+                # it is not a setting, so it is neither named nor counted as kept.
+                continue
             if os.path.lexists(d) and (d.is_symlink() or not d.is_file()):
                 # A link, directory or other non-file at the name: not a settings file
                 # to keep, and not a name to write through or read from. Refused BEFORE

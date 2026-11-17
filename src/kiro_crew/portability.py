@@ -64,7 +64,12 @@ from kiro_crew.history import (
     _safe_key,
     memory_mode_from_header_line,
 )
-from kiro_crew.home_path_rewrite import archive_home, rewrite_staged_paths, this_home
+from kiro_crew.home_path_rewrite import (
+    _read_path_file,
+    archive_home,
+    rewrite_staged_paths,
+    this_home,
+)
 from kiro_crew.mcp_cron import _log_cron_denial, _vet_shell_command
 from kiro_crew.memory_stores import MEMORY_STORES_DIR_NAME, is_host_local_store_state
 from kiro_crew.notifications.settings import ChannelSettings, parse_imported_settings
@@ -118,7 +123,7 @@ from kiro_crew.portability_vetting import (
     _top_manifest,
     validate_import_zip,
 )
-from kiro_crew.security import is_sensitive_path
+from kiro_crew.security import is_sensitive_canonical_path, is_sensitive_path
 from kiro_crew.snapshot import (
     _DB_SIDECAR_GLOBS,
     COMPONENTS,
@@ -197,6 +202,63 @@ def _move_home_paths(snap: Path, summary: dict) -> frozenset[str]:
     if rewrite.moved:
         summary["home_paths_moved"] = rewrite.moved
     return rewrite.cleared_chats
+
+
+def _workspace_dir_verdict(staged: Path, mc: Path) -> tuple[Path | None, str | None]:
+    """The folder the archive's workspace_dir may install, or why it may not (pure check)."""
+    if staged.is_symlink() or not staged.is_file():
+        return None, "the saved folder is not a plain file"
+    home = this_home()
+    value = _read_path_file(staged)
+    if home is None:
+        return None, "this install's home is unknown"
+    if not value.startswith("/") or "\0" in value or ".." in PurePosixPath(value).parts:
+        return None, "the saved folder is not a plain absolute path"
+    resolved, home_real = Path(os.path.realpath(value)), Path(os.path.realpath(home))
+    if resolved == home_real or not resolved.is_relative_to(home_real):
+        return None, "it is not a folder inside this home"
+    if Path(os.path.realpath(mc)).is_relative_to(resolved):
+        return None, "it is the data home or a folder holding it"
+    if is_sensitive_canonical_path(str(resolved)):
+        return None, "it is a protected folder"
+    return resolved, None
+
+
+def _plan_workspace_dir(snap: Path, mc: Path, summary: dict) -> Path | None:
+    """Before a replace swaps anything, decide whether the archive's workspace_dir installs.
+
+    The replace leaves ``workspace_dir`` alone (it is host-local), but the import has
+    already moved the archive's saved folder under this home, so an ordinary folder there
+    is carried over. ``workspace_dir`` roots every session folder, so it must not be the
+    home itself, the data home or a folder holding it, a protected folder, or anything
+    outside this home; then the live copy stays and the summary says so. Decided here so
+    nothing that can refuse runs after the replace has committed.
+    """
+    staged = snap / "workspace_dir"
+    if not os.path.lexists(staged):
+        return None
+    try:
+        resolved, why = _workspace_dir_verdict(staged, mc)
+    except (OSError, ValueError):
+        resolved, why = None, "the saved folder could not be checked"
+    if resolved is not None:
+        # The path that was checked, not the raw value: a link swapped in after the
+        # check is then not followed when the folder is used.
+        return resolved
+    kept = "; this install's copy is kept" if os.path.lexists(mc / "workspace_dir") else ""
+    summary["items"].append(f"workspace_dir (not installed: {why}{kept})")
+    return None
+
+
+def _install_workspace_dir(mc: Path, resolved: Path | None, summary: dict) -> None:
+    """After the replace: write the planned workspace_dir; a failed write is only a note."""
+    if resolved is None:
+        return
+    try:
+        atomic_write(mc / "workspace_dir", str(resolved) + "\n")
+    except OSError:
+        kept = "; this install's copy is kept" if os.path.lexists(mc / "workspace_dir") else ""
+        summary["items"].append(f"workspace_dir (not installed: could not write it{kept})")
 
 
 def _skip_setting(summary: dict, label: str, why: str) -> None:
@@ -923,6 +985,7 @@ def apply_import_zip(
             # channel in between would publish its pre-import copy over the restored
             # file. The notification store also re-reads its file before letting go.
             # Taken in one fixed order, ui-prefs then notifications.
+            workspace_dir = _plan_workspace_dir(snap, mc, summary)
             with contextlib.ExitStack() as swap_guard:
                 if "ui-prefs.json" in vetted_settings:
                     swap_guard.enter_context(ui_prefs.replacing_file())
@@ -933,6 +996,7 @@ def apply_import_zip(
                     )
                     swap_guard.enter_context(channel_settings.replacing_file(channels))
                 _do_replace(snap, mc, None, allow_unpinned=not staging_pinned)
+            _install_workspace_dir(mc, workspace_dir, summary)
             summary["items"].append("full replace")
             if "ui-prefs.json" in vetted_settings:
                 summary["ui_prefs_restored"] = True
