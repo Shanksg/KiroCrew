@@ -1,8 +1,8 @@
-import { useId, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
+import { Fragment, useId, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
 import { Handshake, Shield, ShieldPlus, ShieldCheck, BookOpen, ChevronDown } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioItem, DropdownMenuRadioSegments,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioItem, DropdownMenuRadioSegments, DropdownMenuSeparator,
 } from './ui/dropdown-menu'
 import { baseCommandLabel, trustBasePattern } from '../utils/trustPatterns'
 import { grantEndsAt, grantTtlSeconds, type GrantDuration } from '../utils/grantDuration'
@@ -73,8 +73,10 @@ interface TrustDropdownProps {
   alwaysAllowTool?: string
   /** Why that grant is refused for this card; renders the row disabled with it. */
   alwaysAllowRefusal?: string
-  /** With `timedGrants`: what the exact-match row calls its operand. A shell
-      command is a "command"; any other tool's grant is an exact "call". */
+  /** With `timedGrants`: what the exact-match row grants. A shell command is
+      an exact "command", shown on the card; any other tool's grant is a
+      "call" scope, the tool (and file) the server keys it on, which the row
+      prints itself. */
   commandNoun?: 'command' | 'call'
   /** With `timedGrants`: the element on the card that shows `fullCommand`.
       The open menu is lifted clear of it, so the string an exact-command grant
@@ -117,6 +119,11 @@ const BASE_SCOPE_KEYS: Record<Lifetime, string> = {
   today: 'components.trustDropdown.scope_base_today',
   session: 'components.trustDropdown.scope_base_session',
 }
+
+/** The rows the duration choice applies to: only these grants record a lifetime. */
+const TIMED_ROWS = new Set(['trust_command', 'trust_base'])
+/** The rows whose grant always lasts the session, whatever the duration says. */
+const SESSION_ROWS = new Set(['trust_reads', 'trust'])
 
 const DURATION_KEYS: Record<Exclude<Lifetime, 'hour'>, string> = {
   today: 'components.trustDropdown.duration_today',
@@ -334,7 +341,8 @@ function TimedTrustMenu({ fullCommand, baseCommand, isShell, hasCommand = true, 
   const [lifetime, setLifetime] = useState<Lifetime>('session')
   // The all-tools grant is the widest one here and names no command, so it
   // takes two clicks: the first arms the row, which then says what a second
-  // click does. Anything else the user does in between disarms it.
+  // click does. In the menu, choosing a duration or closing the menu disarms
+  // it; the lone all-tools control disarms when it loses focus or on Escape.
   const [armed, setArmed] = useState(false)
   const [lift, setLift] = useState(0)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -346,9 +354,9 @@ function TimedTrustMenu({ fullCommand, baseCommand, isShell, hasCommand = true, 
   const showBase = hasCommand && isShell && showTrustBase
   const showReads = !!trustReadsLabelKey
   const showAlways = !!(alwaysAllowTool || alwaysAllowRefusal)
-  const allLabel = armed
-    ? i18nT('components.trustDropdown.scope_all_confirm')
-    : i18nT(trustAllLabelKey ?? 'components.trustDropdown.scope_all')
+  const allConfirmLabel = i18nT('components.trustDropdown.scope_all_confirm')
+  const allLabel = armed ? allConfirmLabel : i18nT(trustAllLabelKey ?? 'components.trustDropdown.scope_all')
+  const idleAllLabel = i18nT(trustAllLabelKey ?? 'components.trustDropdown.trust_all_tools')
   // The same row as `PlainTrustMenu`'s: a refused grant stays visible, with its reason.
   const alwaysBody = (
     <span className="min-w-0">{i18nT('components.trustDropdown.always_allow_this_tool')}{alwaysAllowRefusal && !alwaysAllowTool
@@ -391,8 +399,12 @@ function TimedTrustMenu({ fullCommand, baseCommand, isShell, hasCommand = true, 
         onKeyDown={e => { if (e.key === 'Escape') setArmed(false) }}
       >
         <ShieldCheck size={12} className="shrink-0 text-warn" />
-        <span className="min-w-0" aria-live="polite">
-          {armed ? allLabel : i18nT(trustAllLabelKey ?? 'components.trustDropdown.trust_all_tools')}
+        {/* Both labels share one grid cell, the other one drawn invisibly from
+            an attribute, so the button is as wide armed as idle and the second
+            click lands where the first did. The reserve is not in the text. */}
+        <span className="grid min-w-0">
+          <span className="col-start-1 row-start-1" aria-live="polite">{armed ? allLabel : idleAllLabel}</span>
+          <span aria-hidden className="col-start-1 row-start-1 invisible after:content-[attr(data-reserve)]" data-reserve={armed ? idleAllLabel : allConfirmLabel} />
         </span>
       </button>
     )
@@ -406,7 +418,19 @@ function TimedTrustMenu({ fullCommand, baseCommand, isShell, hasCommand = true, 
     rows.push({
       id: 'trust_command',
       icon: <Shield size={12} className="shrink-0 text-accent" />,
-      body: <span className="min-w-0">{commandNoun === 'call' ? i18nT(CALL_SCOPE_KEYS[lifetime]) : i18nT(COMMAND_SCOPE_KEYS[lifetime])}</span>,
+      // A shell grant is an exact-string match, and the card shows that string.
+      // A non-shell grant is not: the server keys it on the tool (and, for a
+      // file write, its one file), whatever the call's other arguments. So that
+      // row prints the server's own label for the scope, whole, as
+      // `PlainTrustMenu` does, rather than claim this exact call.
+      body: commandNoun === 'call' ? (
+        <span className="min-w-0 whitespace-pre-wrap">
+          <Trans
+            i18nKey={CALL_SCOPE_KEYS[lifetime]}
+            components={{ mono: <span data-testid="trust-call-scope" className="bg-bg-elevated px-1.5 py-0.5 rounded font-mono break-all border border-border">{fullCommand}</span> }}
+          />
+        </span>
+      ) : <span className="min-w-0">{i18nT(COMMAND_SCOPE_KEYS[lifetime])}</span>,
       describedBy: commandDescribedBy,
       select: () => onAction('trust_command', fullCommand, ...ttl()),
     })
@@ -423,14 +447,6 @@ function TimedTrustMenu({ fullCommand, baseCommand, isShell, hasCommand = true, 
       select: () => onAction('trust_base', basePattern, ...ttl()),
     })
   }
-  if (showReads) {
-    rows.push({
-      id: 'trust_reads',
-      icon: <BookOpen size={12} className="shrink-0 text-accent" />,
-      body: <span className="min-w-0">{i18nT('components.trustDropdown.scope_reads')}</span>,
-      select: () => onAction('trust_reads'),
-    })
-  }
   if (showAlways) {
     rows.push({
       id: 'always_allow_tool',
@@ -438,6 +454,14 @@ function TimedTrustMenu({ fullCommand, baseCommand, isShell, hasCommand = true, 
       body: alwaysBody,
       disabled: !alwaysAllowTool,
       select: fireAlways,
+    })
+  }
+  if (showReads) {
+    rows.push({
+      id: 'trust_reads',
+      icon: <BookOpen size={12} className="shrink-0 text-accent" />,
+      body: <span className="min-w-0">{i18nT('components.trustDropdown.scope_reads')}</span>,
+      select: () => onAction('trust_reads'),
     })
   }
   if (showTrustAll) {
@@ -506,11 +530,20 @@ function TimedTrustMenu({ fullCommand, baseCommand, isShell, hasCommand = true, 
               </DropdownMenuRadioSegments>
             </div>
           )}
-          {rows.map(row => (
-            <TrustRow key={row.id} aria-describedby={row.describedBy} disabled={row.disabled} onSelect={row.select}>
-              {row.icon}
-              {row.body}
-            </TrustRow>
+          {rows.map((row, i) => (
+            <Fragment key={row.id}>
+              {/* A rule under the rows the duration covers, so it reads as theirs
+                  alone, and a heading over the rows that always last the session. */}
+              {i > 0 && !TIMED_ROWS.has(row.id) && TIMED_ROWS.has(rows[i - 1].id) && <DropdownMenuSeparator />}
+              {SESSION_ROWS.has(row.id) && (i === 0 || !SESSION_ROWS.has(rows[i - 1].id)) && (
+                // A plain line, as the Duration label above is: it names the rows, it is not one.
+                <div data-testid="trust-session-rows" className="px-2 pt-1 pb-0.5 text-[11px] text-muted">{i18nT('components.trustDropdown.session_rows_label')}</div>
+              )}
+              <TrustRow aria-describedby={row.describedBy} disabled={row.disabled} onSelect={row.select}>
+                {row.icon}
+                {row.body}
+              </TrustRow>
+            </Fragment>
           ))}
         </DropdownMenuContent>
       </DropdownMenu>

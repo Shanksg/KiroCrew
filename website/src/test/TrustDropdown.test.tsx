@@ -528,10 +528,23 @@ describe('TrustDropdown timed grants', () => {
     expect(screen.getAllByRole('menuitem')[0]).toHaveAttribute('aria-describedby', 'cmd-1')
   })
 
-  it('calls any tool but a shell command an exact call', () => {
+  it('names any tool but a shell command by the scope it grants', () => {
     render(timed({ isShell: false, commandNoun: 'call' }))
     fireEvent.click(screen.getByText('Trust'))
-    expect(rowTexts()).toEqual(['This exact call — for this session', 'All tools — for this session'])
+    expect(rowTexts()[0]).toBe('ls /tmp — for this session')
+    expect(rowTexts()[0]).not.toContain('exact')
+    expect(screen.getByTestId('trust-call-scope')).toBeInTheDocument()
+  })
+
+  it('keeps the lone all-tools control as wide armed as idle', () => {
+    render(timed({ hasCommand: false, isShell: false }))
+    const button = screen.getByRole('button', { name: 'Trust all tools for this session' })
+    // The other label is reserved in an attribute, never in the text.
+    const reserve = () => button.querySelector('[data-reserve]')!.getAttribute('data-reserve')
+    expect(reserve()).toBe('Click again to confirm — every tool runs without asking')
+    fireEvent.click(button)
+    expect(button).toHaveTextContent(/^Click again to confirm — every tool runs without asking$/)
+    expect(reserve()).toBe('Trust all tools for this session')
   })
 
   it('sends an hour as ttlSeconds on the command row', () => {

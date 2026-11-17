@@ -4,7 +4,8 @@
  * Serves the isolated capture entry (capture/approval-card-redesign.tsx) with a
  * programmatic Vite dev server on loopback, then photographs the REAL composer
  * in each of the card's five states, with the Trust and Reject menus open, with
- * the all-tools row armed, and after a decision, in a light and a dark theme.
+ * the all-tools row armed, and after a decision, in a light and a dark theme,
+ * plus short recordings of a decision and of arming the lone all-tools control.
  * Every row is fabricated inside the entry and every /api call is answered
  * here, so no gateway / kiro-cli / token is involved.
  *
@@ -43,11 +44,12 @@ page.on('pageerror', e => console.log('PAGE EXCEPTION:', e.message))
 // left to the dev server, which has no such route, as in a session with no
 // gateway. Matched on the path's first segment: a `**/api/**` glob also catches
 // Vite's own `/src/api/*` module requests.
-await page.route(url => url.pathname.startsWith('/api/'), route => (
+const stubApi = p => p.route(url => url.pathname.startsWith('/api/'), route => (
   route.request().method() === 'POST'
     ? route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
     : route.continue()
 ))
+await stubApi(page)
 
 const open = async (scene, theme) => {
   await page.goto(`${base}/capture/approval-card-redesign.html?scene=${scene}&theme=${theme}`)
@@ -69,10 +71,29 @@ const reject = () => page.locator('[data-approval-actions] button', { hasText: '
 
 for (const theme of THEMES) {
   // The five states.
-  for (const scene of ['shell', 'reads', 'env', 'mcp', 'none']) {
+  for (const scene of ['shell', 'reads', 'env', 'mcp', 'none', 'override', 'ghost']) {
     await open(scene, theme)
     await shoot(`state-${scene}`, theme)
   }
+
+  // The MCP card's lone all-tools control, armed by its first click. Its
+  // measured width, idle and armed, is logged: the reserve keeps them equal.
+  await open('mcp', theme)
+  const lone = await trust().elementHandle()
+  const width = async () => Math.round((await lone.boundingBox()).width)
+  const idleWidth = await width()
+  await lone.click()
+  await page.waitForTimeout(200)
+  console.log(`  [${theme}] lone all-tools control width: idle ${idleWidth}px, armed ${await width()}px`)
+  await shoot('state-mcp-armed', theme)
+
+  // An MCP card that can also take "Always allow this tool": a menu again.
+  await open('mcp-always', theme)
+  await trust().click()
+  await page.getByRole('menu').waitFor()
+  await page.waitForTimeout(300)
+  await shoot('menu-trust-always-allow', theme)
+  await page.keyboard.press('Escape')
 
   // Trust menu, as it opens: the session lifetime, every row.
   await open('reads', theme)
@@ -119,6 +140,36 @@ for (const theme of THEMES) {
   await page.locator('[data-testid="approval-receipt"]').waitFor()
   await page.waitForTimeout(500)
   await shoot('receipt-rejected', theme)
+}
+
+// Recordings, one clip each: a decision settling into its receipt (the status
+// pill moves and turns into the verdict), and the lone all-tools control's
+// first click. Video at 1x, so each clip stays small.
+const record = async (name, theme, scene, act) => {
+  const ctx = await browser.newContext({ viewport: { width: 860, height: 520 }, recordVideo: { dir: `${OUT}/video-tmp`, size: { width: 860, height: 520 } } })
+  const p = await ctx.newPage()
+  await stubApi(p)
+  await p.goto(`${base}/capture/approval-card-redesign.html?scene=${scene}&theme=${theme}`)
+  await p.locator('[data-approval-actions]').waitFor({ timeout: 30000 })
+  await p.waitForTimeout(900)
+  await act(p)
+  await p.waitForTimeout(1600)
+  await ctx.close()
+  await p.video().saveAs(`${OUT}/${name}-${theme.endsWith('light') ? 'light' : 'dark'}.webm`)
+  console.log('wrote', `${OUT}/${name}`)
+}
+for (const theme of THEMES) {
+  await record('rec-allow-once', theme, 'shell', p => p.getByRole('button', { name: 'Allow once' }).click())
+  await record('rec-reject-once', theme, 'shell', async p => {
+    await p.locator('[data-approval-actions] button', { hasText: 'Reject' }).click()
+    await p.waitForTimeout(400)
+    await p.getByRole('menuitem').first().click()
+  })
+  await record('rec-all-tools-arm', theme, 'mcp', async p => {
+    await p.locator('[data-approval-actions] button', { hasText: 'Trust' }).hover()
+    await p.waitForTimeout(400)
+    await p.locator('[data-approval-actions] button', { hasText: 'Trust' }).click()
+  })
 }
 
 await browser.close()

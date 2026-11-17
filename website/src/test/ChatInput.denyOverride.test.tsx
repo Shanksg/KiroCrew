@@ -83,6 +83,12 @@ beforeEach(() => {
 })
 
 describe('ChatInput security-rule override card', () => {
+  it('shows the refused command once, in its warning, not again as the call payload', () => {
+    renderWithProviders(<ChatInput {...defaultProps} />, { store: createTestStore(stateWithOverrideCard()) })
+    expect(screen.getByTestId('deny-override-warning').textContent).toContain('rm -rf /')
+    expect(screen.queryByTestId('approval-input')).not.toBeInTheDocument()
+  })
+
   it('names the rule and offers no Allow once or Trust control', () => {
     renderWithProviders(<ChatInput {...defaultProps} />, { store: createTestStore(stateWithOverrideCard()) })
     expect(screen.getByTestId('deny-override-warning').textContent).toContain('rm -rf /.*')
