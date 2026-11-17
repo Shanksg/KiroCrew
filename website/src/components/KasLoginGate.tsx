@@ -52,6 +52,16 @@ const LOOPBACK_POLL_INTERVAL_MS = 2_000
 // After this long on the loopback wait screen the screen says the sign-in is not
 // finished: the tab was closed or blocked, or the redirect cannot land.
 const LOOPBACK_SLOW_HINT_MS = 30_000
+// The code screen's line after a loopback attempt degraded, by why it did. A
+// failed poll means the browser did come back, so its code names what went wrong;
+// a timeout, a busy port and the user's own switch keep the "couldn't come back" line.
+const FELL_BACK_LINE = {
+  unreached: 'components.kasLogin.loopback_fell_back',
+  loopback_wrong_address: 'components.kasLogin.loopback_fell_back_wrong_address',
+  loopback_exchange_failed: 'components.kasLogin.loopback_fell_back_exchange_failed',
+  loopback_failed: 'components.kasLogin.loopback_fell_back_failed',
+} as const
+type FellBack = keyof typeof FELL_BACK_LINE
 // The begin error's DOM id, so the SSO field it names can point at it.
 const SSO_ERROR_ID = 'kas-sso-begin-error'
 const SSO_PREFILLED_ID = 'kas-sso-start-url-prefilled'
@@ -604,8 +614,8 @@ function DeviceWaiting({
 }: {
   session: KasLoginDeviceSession
   provider: KasLoginProvider
-  /** True when a loopback attempt degraded here, so the screen explains the switch. */
-  fellBack?: boolean
+  /** Why a loopback attempt degraded here, so the screen explains the switch. */
+  fellBack?: FellBack | false
   /** True while a cancel is settling: leaving this screen is disabled until then. */
   busy: boolean
   /** A cancel that did not settle (see settleCancel): shown, never swallowed. */
@@ -643,7 +653,7 @@ function DeviceWaiting({
           role="status"
           data-testid="kas-login-fell-back"
         >
-          {i18nT('components.kasLogin.loopback_fell_back')}
+          {i18nT(FELL_BACK_LINE[fellBack])}
         </p>
       ) : null}
       <ol className="mt-6 w-full max-w-md list-none space-y-5">
@@ -895,7 +905,7 @@ function KasLoginFlow({
   const [session, setSession] = useState<ActiveSession | null>(null)
   // Set when a loopback attempt degraded to the device flow, so the code screen
   // can say why it appeared instead of the promised no-typing sign-in.
-  const [fellBack, setFellBack] = useState(false)
+  const [fellBack, setFellBack] = useState<FellBack | false>(false)
   // True while the user is replacing a signed-in identity from the embedded
   // card: the chooser renders over a still-authenticated status, and the next
   // credential to land supersedes the stored one. Cleared when the poll answers
@@ -956,7 +966,7 @@ function KasLoginFlow({
     // not a failure the user can act on: silently take the device path instead.
     onError: (err, provider) => {
       if (isLoopbackUnavailable(err)) {
-        setFellBack(true)
+        setFellBack('unreached')
         beginDevice.mutate({ provider })
       }
     },
@@ -1036,7 +1046,13 @@ function KasLoginFlow({
     if (pollStatus !== 'expired' && pollStatus !== 'error') return
     if (pollCode === 'token_store_failed') return
     const provider = session.provider
-    setFellBack(true)
+    setFellBack(
+      pollStatus === 'expired'
+        ? 'unreached'
+        : pollCode === 'loopback_wrong_address' || pollCode === 'loopback_exchange_failed'
+          ? pollCode
+          : 'loopback_failed',
+    )
     setSession(null)
     beginDevice.mutate({ provider })
     // beginDevice is a stable mutation handle; listing it would re-fire on every render.
@@ -1132,7 +1148,7 @@ function KasLoginFlow({
 
   const useCodeInstead = () =>
     replaceAttempt(({ provider }) => {
-      setFellBack(true)
+      setFellBack('unreached')
       beginDevice.mutate({ provider })
     })
 
