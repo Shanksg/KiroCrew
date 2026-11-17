@@ -266,6 +266,73 @@ def uninstall_service() -> int:
     return 2
 
 
+def _set_boot_start(enable: bool) -> int:
+    """Shared body of :func:`disable_service` and :func:`enable_service`.
+
+    0 when the service was turned off (or on), 1 when a step did not take or
+    a scope could not be reached, 3 when no service is installed, 2 when
+    unsupported.
+    """
+    plat = current_platform()
+    unreached: list[str] = []
+    if plat == Platform.SYSTEMD:
+        report = linux.enable() if enable else linux.disable()
+        refused, unreached = report if report is not None else ([], [])
+        accepted = None if report is None else not refused
+        hints = refused + unreached
+    elif plat == Platform.LAUNCHD:
+        accepted = macos.enable() if enable else macos.disable()
+        domain = macos._legacy_domains()[0]
+        target = f"{domain}/{LAUNCHD_LABEL}"
+        if enable:
+            hints = [
+                f"launchctl enable {target}",
+                f"launchctl bootstrap {domain} {macos.PLIST_PATH}",
+            ]
+        else:
+            hints = [f"launchctl disable {target}", f"launchctl bootout {target}"]
+    else:
+        _unsupported_message()
+        return 2
+    if accepted is None:
+        print("Note: No kirocrew service is installed. Install one: kirocrew service install")
+        return 3
+    if not accepted:
+        print(
+            f"Error: kirocrew service {'enable' if enable else 'disable'} did not finish. "
+            "Run these by hand:",
+            file=sys.stderr,
+        )
+        for hint in hints:
+            print(f"   {hint}", file=sys.stderr)
+        return 1
+    if enable:
+        print("Done: kirocrew service enabled and started. It starts at every boot or login.")
+        print("   To keep it stopped: kirocrew service disable")
+    else:
+        print("Done: kirocrew service stopped and disabled. It stays installed but does not")
+        print("   start at boot or login. To turn it back on: kirocrew service enable")
+    if unreached:
+        # Only the scopes this shell reached were changed: a unit in the others
+        # (a per-user unit, seen from a sudo shell) is untouched.
+        print("Warning: this changed only the scopes this shell can reach. Not checked:")
+        for line in unreached:
+            print(f"   {line}")
+    return 0
+
+
+def disable_service() -> int:
+    """Stop the service and keep it from starting at boot or login, leaving it
+    installed. See :func:`_set_boot_start` for the exit codes."""
+    return _set_boot_start(False)
+
+
+def enable_service() -> int:
+    """Undo :func:`disable_service`: start the service at boot or login again,
+    and start it now. See :func:`_set_boot_start` for the exit codes."""
+    return _set_boot_start(True)
+
+
 def service_status() -> int:
     """Print the platform service status. Returns 0 if the service is up, 1 if
     not, 2 if unsupported.

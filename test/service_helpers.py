@@ -230,11 +230,26 @@ def _fake_systemctl(
     the read reports; without it the line is left out, as a manager that does
     not answer the property does.
 
+    ``is-enabled`` answers a state dict's optional ``UnitFileState`` (``enabled``
+    when absent), and ``disabled`` for a scope told to ``disable`` until it is told
+    to ``enable``; ``start`` undoes a ``stop``.
+
     Nothing here spawns anything: the whole point of the fixture is that the
     systemd user manager is host state and must never be touched from a test.
     Every argv is recorded on ``run.calls`` so tests can assert scope and sudo.
     """
-    verbs = {"show", "status", "is-active", "stop", "disable", "restart", "daemon-reload"}
+    verbs = {
+        "show",
+        "status",
+        "is-active",
+        "is-enabled",
+        "stop",
+        "start",
+        "disable",
+        "enable",
+        "restart",
+        "daemon-reload",
+    }
     landing = (
         list(restart_lands_in)
         if isinstance(restart_lands_in, (list, tuple))
@@ -259,6 +274,19 @@ def _fake_systemctl(
             return overrides[verb]
         if verb == "stop" and not stop_is_ignored:
             run.stopped.add(scope)
+        if verb == "start":
+            run.stopped.discard(scope)
+        if verb == "disable":
+            run.disabled.add(scope)
+        if verb == "enable":
+            run.disabled.discard(scope)
+        if verb == "is-enabled":
+            if props is None:
+                return subprocess.CompletedProcess(tokens, 1, "", f"Unit {_UNIT} not found.\n")
+            state = "disabled" if scope in run.disabled else props.get("UnitFileState", "enabled")
+            return subprocess.CompletedProcess(
+                tokens, 0 if state == "enabled" else 1, state + "\n", ""
+            )
         if props is not None and scope in run.stopped:
             props = _DEAD
         if props is not None and scope in run.restarted and verb in {"show", "is-active", "status"}:
@@ -306,6 +334,7 @@ def _fake_systemctl(
     run.calls = []
     run.stopped = set()
     run.restarted = set()
+    run.disabled = set()
     return run
 
 

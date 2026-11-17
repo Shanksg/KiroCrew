@@ -93,6 +93,10 @@ class FakeLaunchctl:
                 )
             self.loaded.add(domain)
             return ok
+        if verb == "print-disabled":
+            # Newer macOS spelling; an unlisted label is enabled.
+            listed = f'\t"{LAUNCHD_LABEL}" => disabled\n' if args[0] in self.disabled else ""
+            return subprocess.CompletedProcess(argv, 0, f"disabled services = {{\n{listed}}}\n", "")
         domain = args[-1].rsplit("/", 1)[0]
         if domain.startswith("gui/") and not self.desktop:
             # No desktop login: the gui domain itself is missing, for every verb.
@@ -116,6 +120,9 @@ class FakeLaunchctl:
             return ok if present else missing
         if verb == "kickstart":
             return ok if domain in self.loaded else missing
+        if verb == "disable":
+            self.disabled.add(domain)
+            return ok
         raise AssertionError(f"unexpected launchctl verb: {argv}")
 
 
@@ -367,3 +374,168 @@ def test_stop_service_propagates_the_launchd_answer(stopped):
         patch.object(svc_macos, "stop", return_value=stopped),
     ):
         assert controller.stop_service() is stopped
+
+
+# --------------------------------------------------------------------------
+# service disable / enable and the login line in status
+# --------------------------------------------------------------------------
+
+
+def test_disable_boots_the_job_out_and_keeps_it_from_loading_at_login(mac):
+    fake = FakeLaunchctl()
+    with _run(fake):
+        mac.install()
+        assert "Starts at the next login: yes" in mac.status()
+        assert mac.disable() is True
+        status = mac.status()
+    assert fake.loaded == set()
+    assert fake.disabled == {GUI, USER}
+    assert mac.PLIST_PATH.exists()
+    assert "Starts at the next login: no (disabled)" in status
+    assert "kirocrew service enable" in status
+
+
+def test_install_after_disable_re_enables_every_domain_before_bootstrap(mac):
+    """The trap: a disabled label refuses `bootstrap`, so a reinstall over
+    `service disable` must clear the override first, in gui/<uid> too when it
+    lands in user/<uid>, or the agent would not load at the next login."""
+    fake = FakeLaunchctl(session=USER)
+    with _run(fake):
+        mac.install()
+        mac.disable()
+        mac.install()
+    assert fake.loaded == {GUI}
+    assert fake.disabled == set()
+    strap = max(i for i, c in enumerate(fake.calls) if c[1] == "bootstrap")
+    enabled = {c[2] for c in fake.calls[:strap] if c[1] == "enable"}
+    assert enabled == {f"{GUI}/{LAUNCHD_LABEL}", f"{USER}/{LAUNCHD_LABEL}"}
+
+
+def test_install_without_a_desktop_still_clears_the_gui_override(mac):
+    fake = FakeLaunchctl(session=USER, desktop=False)
+    fake.disabled.update({GUI, USER})
+    with _run(fake):
+        mac.install()
+    assert fake.loaded == {USER}
+    assert fake.disabled == set()
+
+
+def test_enable_after_disable_bootstraps_the_agent_again(mac):
+    fake = FakeLaunchctl()
+    with _run(fake):
+        mac.install()
+        mac.disable()
+        assert mac.enable() is True
+        status = mac.status()
+    assert fake.loaded == {GUI}
+    assert fake.disabled == set()
+    assert "Starts at the next login: yes" in status
+
+
+def test_enable_on_a_loaded_agent_only_clears_the_override(mac):
+    fake = FakeLaunchctl()
+    with _run(fake):
+        mac.install()
+        before = sum(c[1] == "bootstrap" for c in fake.calls)
+        assert mac.enable() is True
+    assert sum(c[1] == "bootstrap" for c in fake.calls) == before
+
+
+def test_restart_after_disable_does_not_load_the_agent(mac):
+    """`kirocrew restart` never bootstraps: with the agent disabled and booted
+    out it attempts nothing, so the CLI refuses rather than load it again."""
+    fake = FakeLaunchctl()
+    with (
+        _run(fake),
+        patch("kiro_crew.service.controller.current_platform", return_value=Platform.LAUNCHD),
+    ):
+        mac.install()
+        mac.disable()
+        report = controller.restart_service()
+    assert report.attempted is False
+    assert fake.loaded == set()
+
+
+def test_disable_and_enable_without_a_plist_are_none(mac):
+    fake = FakeLaunchctl()
+    with _run(fake):
+        assert mac.disable() is None
+        assert mac.enable() is None
+    assert fake.calls == []
+
+
+def test_a_refused_disable_does_not_boot_the_job_out(mac):
+    _with_plist(mac)
+    fake = FakeLaunchctl()
+    fake.loaded.add(GUI)
+    refused = subprocess.CompletedProcess([], 1, "", "Operation not permitted")
+    with patch(
+        "kiro_crew.service.macos.subprocess.run",
+        side_effect=lambda argv, **kw: refused if argv[1] == "disable" else fake(argv, **kw),
+    ):
+        assert mac.disable() is False
+    assert fake.loaded == {GUI}
+
+
+def test_a_refused_bootout_after_disable_is_not_reported_as_stopped(mac):
+    _with_plist(mac)
+    fake = FakeLaunchctl()
+    fake.loaded.add(GUI)
+    fake.refuse_bootout = True
+    with _run(fake):
+        assert mac.disable() is False
+    assert fake.loaded == {GUI}
+
+
+def test_enable_right_after_disable_waits_out_the_async_bootout(mac):
+    """launchd unloads asynchronously: `disable` waits for the job to leave, so
+    an `enable` straight after it bootstraps instead of seeing a job that is
+    still on its way out and reporting it started."""
+    fake = FakeLaunchctl(linger=3)
+    with _run(fake):
+        mac.install()
+        assert mac.disable() is True
+        assert not fake.leaving
+        assert mac.enable() is True
+    assert fake.loaded == {GUI}
+
+
+def _refusing(fake, verb, domain):
+    refused = subprocess.CompletedProcess([], 1, "", "Operation not permitted")
+
+    def run(argv, **kw):
+        if argv[1] == verb and argv[2].startswith(f"{domain}/"):
+            return refused
+        return fake(argv, **kw)
+
+    return patch("kiro_crew.service.macos.subprocess.run", side_effect=run)
+
+
+def test_a_refused_enable_write_is_not_a_success(mac):
+    _with_plist(mac)
+    fake = FakeLaunchctl()
+    fake.loaded.add(GUI)
+    fake.disabled.add(GUI)
+    with _refusing(fake, "enable", GUI):
+        assert mac.enable() is False
+    assert fake.disabled == {GUI}
+
+
+def test_a_disable_refused_in_one_domain_is_not_a_success(mac):
+    _with_plist(mac)
+    fake = FakeLaunchctl()
+    fake.loaded.add(GUI)
+    with _refusing(fake, "disable", USER):
+        assert mac.disable() is False
+    assert fake.loaded == {GUI}
+
+
+def test_enable_with_an_indeterminate_probe_is_not_a_start(mac):
+    """`print` failing with neither "loaded" nor "not found" is not proof the
+    agent runs: enable reports failure instead of skipping the bootstrap."""
+    _with_plist(mac)
+    fake = FakeLaunchctl()
+    with _refusing(fake, "print", GUI):
+        assert mac.enable() is False
+    assert fake.loaded == set()
+    assert not any(c[1] == "bootstrap" for c in fake.calls), fake.calls
