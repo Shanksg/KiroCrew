@@ -843,7 +843,14 @@ exfiltration redactors run.
    (skipped with `--agent-only`). A refused typed answer (a relative path, a
    folder that cannot be created) is asked again at a terminal; off one, the
    folder shown is kept and named. Enter on a folder shown that cannot be
-   created prints the platform-default line
+   created prints the platform-default line. This folder holds per-session work
+   directories and task output (`workspace_root()`); it does not move where
+   dashboard chats start, so the step also names that folder by the rule slot
+   creation applies (`cli_setup_chat_folder.py`): `dashboard.default_project`
+   when it is a usable folder, else the default workspace's
+   `workspaces.<name>.dir` (`workspace_dir_for()`), with the setting that
+   changes it and the session-folder project that overrides it. A config this
+   cannot resolve prints that it could not, and setup goes on
 4. Installs agent config to `~/.kiro/agents/kirocrew.json`
 5. Prompts for Slack credentials and the slash-command name only when `--slack`
    is passed; the default wizard configures no messaging channels and prints a
