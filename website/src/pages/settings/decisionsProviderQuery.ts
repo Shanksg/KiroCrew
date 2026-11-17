@@ -43,6 +43,15 @@ export function configuredModelRefused(data: Parameters<typeof providerPermitted
 }
 
 /**
+ * The surfaces that still send to the configured model the dashboard refuses, under a
+ * recorded consent: the dashboard's refusal binds only the dashboard's own turns. Empty
+ * without a consent recorded for the configured address, and on an older gateway.
+ */
+export function surfacesStillSending(data: { permitted_surfaces?: string[] }, consentRecorded: boolean): string[] {
+  return consentRecorded && Array.isArray(data.permitted_surfaces) ? data.permitted_surfaces : []
+}
+
+/**
  * Whether the policy refuses every model the picker LISTS: the hosted provider, every
  * local preset, and SageMaker when the gateway offers it. "No model" is then the only
  * choice in the list. It says nothing about an endpoint the owner wrote by hand, which

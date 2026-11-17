@@ -165,6 +165,12 @@ export interface DecisionsProviderData {
    * does not govern it. Absent on an older gateway.
    */
   provider_permitted?: Record<string, boolean>
+  /**
+   * While the dashboard's ceiling refuses the configured model: the other surfaces
+   * (`slack`, `cli`, `cron`, ...) whose ceiling permits it, so a recorded consent still
+   * sends from them. Empty when the dashboard permits it. Absent on an older gateway.
+   */
+  permitted_surfaces?: string[]
 }
 
 /** A SageMaker endpoint as the picker names it; the gateway builds the address. */

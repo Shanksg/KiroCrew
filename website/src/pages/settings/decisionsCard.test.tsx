@@ -1410,6 +1410,53 @@ describe('Decisions preview card', () => {
       expect(document.getElementById('decisions-egress-note')?.textContent).toMatch(/on this machine/)
     })
 
+    it('names the surfaces that still send under the recorded consent, beside the switch', async () => {
+      stubGateway(consentOf(true, { configured_endpoint: LAYA_URL, endpoint: LAYA_URL, permits: false, withdrawn: true }))
+      stubHostedProvider({
+        active: 'laya',
+        configured_endpoint: LAYA_URL,
+        loopback: true,
+        provider_permitted: { jev: true, laya: false },
+        permitted_surfaces: ['slack', 'cron'],
+      })
+      renderSection()
+      const line = await screen.findByTestId('decisions-refused-still-sending', {}, HOSTED_KEY_DRAWS)
+      expect(line.textContent).toBe(
+        'This dashboard is refused, but your recorded agreement still sends decisions to this model from slack and cron. Turn this switch off to stop.',
+      )
+    })
+
+    it('names only the permitted surfaces, never claiming the dashboard is the sole refusal', async () => {
+      // Slack and cron refused too, the CLI permitted: the line names the CLI alone
+      // and says nothing about which other surfaces refuse.
+      stubGateway(consentOf(true, { configured_endpoint: LAYA_URL, endpoint: LAYA_URL, permits: false, withdrawn: true }))
+      stubHostedProvider({
+        active: 'laya',
+        configured_endpoint: LAYA_URL,
+        loopback: true,
+        provider_permitted: { jev: true, laya: false },
+        permitted_surfaces: ['cli'],
+      })
+      renderSection()
+      const line = await screen.findByTestId('decisions-refused-still-sending', {}, HOSTED_KEY_DRAWS)
+      expect(line.textContent).toContain('from cli.')
+      expect(line.textContent).not.toMatch(/\bonly\b/i)
+    })
+
+    it('names no surface once the consent is off', async () => {
+      stubGateway(consentOf(false, { configured_endpoint: LAYA_URL, endpoint: '', permits: false }))
+      stubHostedProvider({
+        active: 'laya',
+        configured_endpoint: LAYA_URL,
+        loopback: true,
+        provider_permitted: { jev: true, laya: false },
+        permitted_surfaces: ['slack'],
+      })
+      renderSection()
+      await screen.findByTestId('decisions-configured-refused', {}, HOSTED_KEY_DRAWS)
+      expect(screen.queryByTestId('decisions-refused-still-sending')).toBeNull()
+    })
+
     it('never refuses an address the owner wrote by hand, whatever the list says', async () => {
       stubGateway(consentOf(true, { configured_endpoint: PROXY, endpoint: PROXY }))
       stubHostedProvider({

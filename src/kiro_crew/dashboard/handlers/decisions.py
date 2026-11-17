@@ -1159,6 +1159,7 @@ def _provider_payload() -> dict:
         configured_sagemaker,
         endpoint_refused,
     )
+    from kiro_crew.dashboard.handlers.decisions_surfaces import refused_reading
     from kiro_crew.decisions import gate as _gate
     from kiro_crew.decisions import impl_sagemaker, local_models
     from kiro_crew.decisions.capability import PROVIDER_SAGEMAKER, denied_sides
@@ -1183,16 +1184,14 @@ def _provider_payload() -> dict:
     )
     hosted_permitted = offers["hosted_permitted"]
     sagemaker_permitted = offers["sagemaker_permitted"]
-    # The hosted default (or an unset endpoint, which falls back to it) that the
-    # ceiling's ``endpoints`` or ``providers`` list refuses is a provider the send path
-    # never reaches: report "No model" so the card asks for a choice instead of naming
-    # a destination. The config is not rewritten. A row-level denial keeps its own reading.
+    # The hosted default (or an unset endpoint, its fallback) that the ceiling's ``endpoints``
+    # or ``providers`` list refuses reads "No model", so the card asks for a choice instead of
+    # naming a destination. The config is not rewritten. A row-level denial keeps its reading.
     if active == local_models.PRESET_JEV and not hosted_denied and not hosted_permitted:
         active = local_models.PRESET_NONE
-    # The same holds for a configured SageMaker address whose own regional runtime host
-    # the ceiling refuses, whatever other regions it permits, or that the ``providers``
-    # list does not allow: the send path and the consent PUT refuse it, so it reads "No
-    # model". Whether the SageMaker OPTION is offered is a separate answer.
+    # The same holds for a configured SageMaker address whose own regional runtime host the
+    # ceiling refuses, whatever other regions it permits, or that the ``providers`` list does
+    # not allow. Whether the SageMaker OPTION is offered is a separate answer.
     configured_refused = False
     if (
         active == PRESET_SAGEMAKER
@@ -1238,6 +1237,8 @@ def _provider_payload() -> dict:
         # part that governs it ANDed (``decisions_offers``). The picker draws a refused
         # model greyed with the administrator's wording; the PUT refuses it.
         "provider_permitted": offers["provider_permitted"],
+        # Other surfaces still permitting a model this one refuses (``decisions_surfaces``).
+        "permitted_surfaces": refused_reading(endpoint, model, offers, configured_refused),
     }
 
 
