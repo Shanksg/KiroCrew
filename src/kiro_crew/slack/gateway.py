@@ -151,6 +151,7 @@ from kiro_crew.cron import (
     effective_wake_budget,
 )
 from kiro_crew.cron_script import delivery_fingerprint, run_command_sandboxed, run_script_sandboxed
+from kiro_crew.cron_service.crew_log_open import open_cron_crew_log  # noqa: F401
 from kiro_crew.cron_service.fields import (  # noqa: F401
     auto_job_approver,
     effective_job_approval_mode,
