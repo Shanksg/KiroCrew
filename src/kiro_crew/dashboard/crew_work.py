@@ -98,7 +98,7 @@ def summarize(
     running; ``0`` for never). Both answers come from ``is_stale``. ``person_workers``
     names the worker each person-waiting item belongs to, the same way.
     """
-    from kiro_crew.dashboard.handlers.work_ledger_board import awaits_person
+    from kiro_crew.dashboard.handlers.work_ledger_board import ask_is_current, awaits_person
     from kiro_crew.session_ledger_layout import ledger_key
     from kiro_crew.work_ledger import (
         DEFAULT_STALE_WINDOW_SECS,
@@ -117,7 +117,11 @@ def summarize(
     for raw in items:
         item = WorkItem.from_dict(dict(raw))
         open_count += 1
-        if awaits_person(item, list(raw.get("events") or [])):
+        events = list(raw.get("events") or [])
+        # Only a question the conductor vetted and recorded (a current ``ask``) is
+        # the person's, as the Board's Needs your input lists it; an unvetted one
+        # is still the conductor's to handle.
+        if item.ask and ask_is_current(events) and awaits_person(item, events):
             person += 1
             # Which worker it waits for, so the row counts a worker whose tool
             # approval is also open once ("" for a remote or unbound worker).

@@ -109,7 +109,7 @@ describe('Conductor mode run line', () => {
   })
 
   it('says Waiting for you over a settled verdict when an item asks the person', async () => {
-    const ask = ITEM({ item_id: 'it_q', state: 'open', status: 'question', reason: 'needs_human', terminal: false, alive: 'idle', awaits_person: true, outstanding: true, closed_at: null })
+    const ask = ITEM({ item_id: 'it_q', state: 'open', status: 'question', reason: 'needs_human', terminal: false, alive: 'idle', awaits_person: true, outstanding: true, closed_at: null, ask: { what: 'Pick one', why: '', options: [], pick: '', pick_why: '', written_at: '2026-10-30T00:06:00Z' } })
     api.crewBoard.mockResolvedValue({ ...BOARD, items: [ask], run: RUN({ settled: 'stopped', open: 1, accepted: 0 }) })
     renderPanel()
     expect(await runLine()).toHaveAttribute('data-state', 'waiting')
@@ -131,7 +131,7 @@ describe('Conductor mode run line', () => {
   })
 
   it("a failed reopen from an ask row is reported once, in that row, not again by the run line", async () => {
-    const ask = ITEM({ item_id: 'it_q', state: 'open', status: 'question', reason: 'needs_human', terminal: false, alive: 'idle', awaits_person: true, outstanding: true, closed_at: null })
+    const ask = ITEM({ item_id: 'it_q', state: 'open', status: 'question', reason: 'needs_human', terminal: false, alive: 'idle', awaits_person: true, outstanding: true, closed_at: null, ask: { what: 'Pick one', why: '', options: [], pick: '', pick_why: '', written_at: '2026-10-30T00:06:00Z' } })
     api.crewBoard.mockResolvedValue({ ...BOARD, items: [ask], run: RUN({ settled: '', open: 1, accepted: 0 }) })
     api.resumeChatSlot.mockResolvedValue({ ok: false })
     renderPanel('w-1', [{ key: 'w-1', title: 'Worker', crew_root: 'root-1' }])

@@ -232,6 +232,8 @@ async def test_a_crew_log_that_does_not_take_it_leaves_the_ask(monkeypatch):
 @pytest.mark.asyncio
 async def test_the_sidebar_count_and_goal_board_agree_after_the_answer():
     ids = await _blocked_on_approval()
+    # The sidebar counts only a question the conductor vetted (a current ask record).
+    wl.apply_ask_record(CONDUCTOR_A, ids["item_a"], what="Approve the tool call")
 
     def rows() -> list[dict]:
         item = wl.read_work_item(CONDUCTOR_A, ids["item_a"])
