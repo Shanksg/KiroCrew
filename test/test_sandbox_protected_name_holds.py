@@ -657,6 +657,7 @@ class TestLeafOnlyPopulationIsRecorded:
         "<crew>/secret-request-policy": (3, "standard cc strict"),
         "<crew>/security_policy.json": (3, "standard cc strict"),
         "<crew>/seed-provenance": (3, "standard cc strict"),
+        "<crew>/session-tokens": (3, "standard cc strict"),
         "<crew>/settings_seeds.json": (3, "standard cc strict"),
         "<crew>/shared_crew_preview.json": (3, "standard cc strict"),
         "<crew>/skill-projection": (3, "standard cc strict"),
