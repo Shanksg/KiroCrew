@@ -76,6 +76,14 @@ restores your recall without also restoring every unrelated working file in
 `workspace/`. Selections may overlap — asking for both `memory` and `workspace`
 stages the shared paths once.
 
+Restoring `workspace` never installs the bundle's agent config found anywhere under
+`workspace/`, in Replace or Merge: `.claude/`, `.mcp.json`, `.kiro/`, `.codex/`, `.goose/`,
+`.goosehints`, `.opencode/`, `opencode.json(c)`, `.pi/` and `.mimocode/`, `mimocode.json(c)`.
+An agent session started in `workspace/` or one of its project folders reads them, and a
+bundle can come from someone else. Your own copies are kept, and the result names what was
+left out. Notes (`CLAUDE.md`, `AGENTS.md`) restore as usual, and the result names each one
+it installed so you can read it.
+
 `artifacts` carries the artifact library — every report, log and generated file
 saved from a session. `uploads` carries the files handed to the product from your own
 disk. Both are absent on a home that has never made one, and absent is not a failure:
