@@ -1754,6 +1754,24 @@ describe('a provider that needs attention', () => {
     expect(mcpApply).not.toHaveBeenCalled()
     expect(connectionsMint).not.toHaveBeenCalled()
   })
+
+  it('adds the provider on Connect once the user removes the hand-written row', async () => {
+    mcpServers.mockResolvedValueOnce([server({ status: 'needs_auth', url: `${NOTION_URL}/` })])
+    mcpCustomGet.mockRejectedValue(new ApiError(404, "server 'notion' not found"))
+    mount()
+
+    fireEvent.click(await waitFor(() => within(card('notion')).getByRole('button', { name: /Reconnect|Connect/ })))
+    await waitFor(() => expect(within(card('notion')).getByRole('alert')).toBeInTheDocument())
+
+    // The user removed the row from their mcp.json, so the re-read inventory
+    // has none; the next Connect adds Notion instead of repeating the 404.
+    await waitFor(() => expect(card('notion')).toHaveAttribute('data-state', 'not-connected'))
+    fireEvent.click(within(card('notion')).getByRole('button', { name: /Connect/ }))
+
+    await waitFor(() => expect(mcpCustomAdd).toHaveBeenCalledTimes(1))
+    expect(mcpCustomGet).toHaveBeenCalledTimes(1)
+    expect(mcpCustomUpdate).not.toHaveBeenCalled()
+  })
 })
 
 // Provider brand marks. The art inventory and the card roster are maintained

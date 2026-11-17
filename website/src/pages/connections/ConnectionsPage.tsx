@@ -558,6 +558,9 @@ export default function ConnectionsPage({ servicesEnabled = false }: { servicesE
       // so say where it lives and what to change instead of "not found".
       const stored = await api.mcpCustomGet(existing.name).catch((error: unknown) => {
         if (error instanceof ApiError && error.status === 404) {
+          // Re-read the inventory so a Connect after the user removes that
+          // entry sees it gone and adds the provider, not this 404 again.
+          void queryClient.invalidateQueries({ queryKey: ['mcp-servers'] })
           throw new Error(t('pages.connectionsPage.connect_hand_written_row', {
             provider: provider.name,
             name: existing.name,
