@@ -707,6 +707,31 @@ def _vet_app_owner_enabled(job: CronJob) -> str | None:
     return reason
 
 
+def _vet_job_env(env: dict[str, str]) -> str | None:
+    """Judge every value of a script or command job's ``env`` block as a command line.
+
+    The block reaches the child (``cron_script_grants._overlay_job_env``), and a tool
+    the vetted command or script calls can run a value as a command of its own
+    (``GIT_SSH_COMMAND``, an editor or pager variable). Name-by-name denial cannot list
+    every such variable, so each value gets the composition and credential scans a command
+    body gets. The governance ``commands`` ceiling is not applied: the job's own command is
+    authorized by it, and a value is not a command that ceiling is meant to admit.
+    Returns the first refusal, naming the key and never the value.
+    """
+    for key, value in env.items():
+        if not isinstance(value, str) or not value:
+            continue
+        reason = _vet_shell_command(value, governance_checked=True)
+        if reason:
+            return (
+                f"Error: job env {key!r} refused: {reason.removeprefix('Error: ')} "
+                "A job env value is judged as command text, so data that reads as shell "
+                '(compact JSON `{"a":1,"b":2}`, a `$` before a digit) must be rewritten '
+                '(`{ "a": 1, "b": 2 }`) or read by the script from a file.'
+            )
+    return None
+
+
 def vet_job_at_fire_time(job: CronJob) -> str | None:
     """Re-run the governance gates for an already-scheduled cron job at FIRE time.
 
@@ -727,7 +752,9 @@ def vet_job_at_fire_time(job: CronJob) -> str | None:
       command while the scan judges what the command COMPOSES, and only the
       second one moves when this module's refusals change;
     - ``script`` jobs: the script BODY re-scan (:func:`_vet_script_file`) on the
-      freshly re-resolved path, so an on-disk edit after authoring is caught.
+      freshly re-resolved path, so an on-disk edit after authoring is caught;
+    - ``command`` and ``script`` jobs: every ``env`` value through the command
+      composition scan (:func:`_vet_job_env`), first, since the block reaches the child.
 
     Every decision — allowed and denied — leaves a SEL ``governance_decision``
     event keyed ``cron:<job.id>``, so permitted fires are auditable too.
@@ -750,6 +777,12 @@ def vet_job_at_fire_time(job: CronJob) -> str | None:
         _audit_fire_time_decision(job.id, "capabilities.cron", "denied", reason)
         return reason
     _audit_fire_time_decision(job.id, "capabilities.cron", "allowed")
+    if (job.command or job.script) and job.env:
+        reason = _vet_job_env(job.env)
+        if reason:
+            _audit_fire_time_decision(job.id, "cron_job_env", "denied", reason)
+            return reason
+        _audit_fire_time_decision(job.id, "cron_job_env", "allowed")
     if job.command:
         reason = _vet_command_governance(job.command)
         if reason:

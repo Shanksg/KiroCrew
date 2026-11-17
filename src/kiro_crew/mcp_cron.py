@@ -1562,6 +1562,7 @@ if TYPE_CHECKING:  # every owner-defined name in _EXPORTS, for type checkers and
         _resolve_cron_folder_via,
         _vet_app_owner_enabled,
         _vet_command_governance,
+        _vet_job_env,
         _vet_script_contents,
         vet_job_at_fire_time,
     )
