@@ -232,7 +232,11 @@ hover.
 replays for a tap are ignored, because a hint appearing mid-tap can cost the click
 (a real mouse on a touch device still hovers). An anchor whose bubble outranks its
 click — one with no click action, or whose tip carries a warning the user must see
-before acting — opts in with `openOnTap`.
+before acting — opts in with `openOnTap`. An `openOnTap` hint stays open through
+the compatibility mouse leave a touch browser emits as the finger lifts; blur,
+Escape or an anchor-moving scroll closes it. This persistence is part of the
+opt-in: without it the bubble exists for only the tap's event turn and a touch
+user never sees it.
 
 ### The markdown renderer
 

@@ -20,11 +20,12 @@ import { useGuideTrustRootAttrs } from '../guide/trustRoot'
  * - Keyboard focus shows synchronously. A tab stop is deliberate in a way a
  *   pointer transit is not, and a keyboard user has no second cursor to wave.
  * - Escape hides while open, without requiring blur.
- * - A touch tap never shows the hint (`TOUCH_REPLAY_WINDOW_MS`): the mouse
- *   events a browser replays for a tap are ignored, decided by the tap's own
- *   pointer events so a real mouse on a touch device still hovers. On iOS a
- *   hint appearing mid-tap cost the click. A held outcome still opens, and an
- *   anchor may opt in (`openOnTap`) when its bubble outranks its click.
+ * - A touch tap never shows the hint (`TOUCH_REPLAY_WINDOW_MS`) unless the
+ *   anchor opts into `openOnTap`: the mouse events a browser replays for a tap
+ *   are ignored, decided by the tap's own pointer events so a real mouse on a
+ *   touch device still hovers. On iOS a hint appearing mid-tap cost the click.
+ *   An opted-in hint survives the replay's trailing mouse leave and closes on
+ *   blur, Escape or scroll. A held outcome still opens.
  * - A scroll that can move the anchor hides while open: the position is
  *   captured at show time, so after such a scroll the bubble would sit
  *   detached from its anchor. Capture phase, because the strips that scroll
@@ -275,7 +276,8 @@ export function useInstantTip({ hold = 0, placement = 'above', openOnTap = false
   const notePointer = (e: React.PointerEvent) => {
     touchUntilRef.current = e.pointerType === 'touch' ? Date.now() + TOUCH_REPLAY_WINDOW_MS : 0
   }
-  const fromTouch = () => !openOnTap && Date.now() < touchUntilRef.current
+  const touchReplay = () => Date.now() < touchUntilRef.current
+  const fromTouch = () => !openOnTap && touchReplay()
   // Links the anchor to the bubble (`aria-describedby` -> `role="tooltip"`),
   // restoring what the native `title` gave screen readers for free. Applied
   // unconditionally: a described-by pointing at a not-yet-rendered id is
@@ -446,6 +448,10 @@ export function useInstantTip({ hold = 0, placement = 'above', openOnTap = false
     },
     onMouseLeave: () => {
       pointerInRef.current = false
+      // A touch browser can replay mouseleave as the finger lifts. An anchor
+      // that opted into tap help owes a persistent bubble; the focused button
+      // closes it on blur when the person taps elsewhere.
+      if (openOnTap && touchReplay()) { cancelPending(); return }
       // Held: the bubble carries an outcome the user must still be able to
       // read; only a pending intent open is dropped. It closes when the hold
       // ends (effect above).

@@ -1173,6 +1173,16 @@ describe('InstantTip on touch', () => {
     expect(screen.getByRole('tooltip')).toBeInTheDocument()
   })
 
+  it('openOnTap: a tap survives the browser replay mouseleave until focus leaves', () => {
+    render(<TapOpensHarness />)
+    const anchor = screen.getByRole('button', { name: 'anchor' })
+    tap(anchor)
+    fireEvent.mouseLeave(anchor)
+    expect(screen.getByRole('tooltip')).toBeInTheDocument()
+    fireEvent.blur(anchor)
+    expect(screen.queryByRole('tooltip')).toBeNull()
+  })
+
   it('an outcome the tap produced still opens its held bubble at the tapped anchor', () => {
     // The copy chip: the tap copies, and "Copied!" is the only sign it did.
     render(<HoldHarness />)
