@@ -1,20 +1,22 @@
 ---
 title: "App SDK browser: let an app show, read and annotate the browser that its Bot uses"
-status: draft
+status: accepted
 author: chenmingwei23
 created: 2026-11-17
-last-audited: 2026-11-17
-audited-at: 5d18d11c70
-doc-pr:
-implementation-prs: []
-tracking-issues: []
+last-audited: 2026-11-18
+audited-at: 39c63d2e56
+doc-pr: 38322
+implementation-prs: [39018, 39020, 39022]
+tracking-issues: [39017]
 supersedes: []
 superseded-by: []
 ---
 
 # RFC: App SDK Browser
 
-- Status: draft. Nothing in this document is built. Each step in the Migration
+- Status: accepted 2026-11-18. The maintainer Joe Guo (@iamwhatever) approved
+  and merged [#38322](https://github.com/kirodotdev/KiroCrew/pull/38322).
+  Nothing in this document is built yet. Each step in the Migration
   plan lands as its own pull request after a maintainer signs the design, and
   each of those pull requests carries its own App Kit doc update.
 - Related: `rfc-app-agent-tools-third-party-grant.md` (accepted; owns the
