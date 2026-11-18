@@ -339,6 +339,17 @@ def _relay_route_configured() -> bool:
     return agent.acp_backend == ACP_BACKEND_KAS and not agent.kas_bundle
 
 
+def _configured_backend_is_claude() -> bool:
+    """Whether ``agent.acp_backend`` is claude. Blocking (reads config); unreadable reads as not."""
+    from kiro_crew.agent_sdk.backends import ACP_BACKEND_CLAUDE
+    from kiro_crew.config import KiroCrewConfig
+
+    try:
+        return KiroCrewConfig.load().agent.acp_backend == ACP_BACKEND_CLAUDE
+    except Exception:  # noqa: BLE001 - keep the probe when config cannot be read
+        return False
+
+
 def _relay_route_resolved(environ: Mapping[str, str], home: Path) -> bool:
     """Whether the next KAS spawn still takes the relay, config unchanged.
 
@@ -1060,8 +1071,13 @@ async def _audited_identity_probe(
     Either way the environment carries :data:`_IDENTITY_PROBE_ENV_KEYS`, so a
     host authenticated by Kiro CLI's own API-key variable is detected as
     signed in rather than reported "Not logged in".
+
+    Not run when the configured backend is claude: those sessions never use the
+    Kiro CLI sign-in, and ``whoami`` can refresh a token and write its store.
     """
 
+    if await asyncio.to_thread(_configured_backend_is_claude):
+        return ProcessResult(ok=False, error="whoami skipped: the backend is claude")
     action = "probe_identity"
     await self._audit(
         action=action,
