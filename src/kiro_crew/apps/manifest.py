@@ -236,6 +236,7 @@ _CRON_FIELD_JSON_TYPES = {
     "timeout": "a whole number of seconds",
     "timeout_secs": "a whole number of seconds",
     "strict_schedule": "a boolean",
+    "approval_mode": 'the string "auto"',
 }
 
 #: Refusal for a manifest that schedules ``crons`` without the ``permissions.cron``
@@ -765,6 +766,7 @@ class AppManifest:
         if self.crons:
             from kiro_crew.cron import is_valid_skip_date, is_valid_timezone
             from kiro_crew.cron_service.fields import validate_create_timeouts
+        auto_crons: list[CronEntry] = []
         for cron in self.crons:
             if not cron.name:
                 errors.append("cron entry missing required field: name")
@@ -809,6 +811,13 @@ class AppManifest:
                 )
             except ValueError as exc:
                 errors.append(f"cron entry {cron.name!r}: {exc}")
+            if cron.approval_mode not in ("", "auto"):
+                errors.append(
+                    f'cron entry {cron.name!r}: approval_mode must be "auto" or absent, '
+                    f"got {cron.approval_mode!r}"
+                )
+            elif cron.approval_mode == "auto":
+                auto_crons.append(cron)
             if cron.enabled_type_invalid:
                 errors.append(
                     f"cron entry {cron.name!r}: 'enabled' must be a JSON boolean "
@@ -855,12 +864,37 @@ class AppManifest:
         # app run its text under an agent carrying broader tool grants and
         # auto-approvals than the default. Refused at install, where the app's own
         # `agents` are known, rather than clamped later where nobody sees it.
+        # A cron's `approval_mode: "auto"` is held to the same agents: on a host agent
+        # every unattended call would be approved with the owner's tools.
         commands_with_agent = [c for c in self.contributes.commands if c.agent]
-        if commands_with_agent:
-            unchecked_agents: list[str] = []
+        unchecked_agents: list[str] = []
+        if commands_with_agent or auto_crons:
+            from kiro_crew.cron_service.identity import agent_sequence_dispatches, names_no_agent
+
             own = _declared_agent_names(
                 self.agents, app_root, unchecked_agents, known_refusals=agent_refusals
             )
+            for auto in auto_crons:
+                if agent_sequence_dispatches(list(auto.agent_sequence or [])):
+                    # Each step runs its own agent, so `agent` does not say who runs.
+                    errors.append(
+                        f'cron entry {auto.name!r}: approval_mode "auto" cannot be set '
+                        "on an entry whose agent_sequence runs more than one step"
+                    )
+                    continue
+                if auto.agent in own and not names_no_agent(auto.agent):
+                    continue
+                if unchecked_agents and auto.agent:
+                    report_path(
+                        PATH_UNVERIFIED_REFUSAL,
+                        f"cron entry {auto.name!r}: agent {auto.agent!r} "
+                        f"{PATH_UNVERIFIED_REFUSAL}: {', '.join(unchecked_agents)}",
+                    )
+                    continue
+                errors.append(
+                    f"cron entry {auto.name!r}: approval_mode \"auto\" needs an 'agent' "
+                    "naming one of this app's own agents (declared in `agents`)"
+                )
             for cmd in commands_with_agent:
                 if cmd.agent in own:
                     continue
