@@ -192,6 +192,7 @@ async def _close_tabs_of(state: Any, key: str) -> None:
             relay = _live_handlers()._current_relay()
             if relay is not None:
                 await relay.close_agent_targets(hub.targets_of(key))
+            hub.forget(key)
     except Exception:  # noqa: BLE001 - best effort beside a close that already committed
         logger.debug("browser: closing the tabs of %s failed", key, exc_info=True)
 

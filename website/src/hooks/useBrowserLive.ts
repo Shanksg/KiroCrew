@@ -617,9 +617,10 @@ class BrowserLiveStore {
     if (s.reportedVisible === v) return
     s.reportedVisible = v
     // A write the gateway did not take was not heard: forget it, so the next report
-    // sends this value again instead of being skipped as already sent.
-    this.writes.visibility(sessionKey, v).catch(() => {
-      if (s.reportedVisible === v) s.reportedVisible = null
+    // sends this value again instead of being skipped as already sent. A closed
+    // chat's key is refused for good (`unknown_session`), so that one is not resent.
+    this.writes.visibility(sessionKey, v).catch((e: unknown) => {
+      if (s.reportedVisible === v && errorCode(e) !== 'unknown_session') s.reportedVisible = null
     })
   }
 

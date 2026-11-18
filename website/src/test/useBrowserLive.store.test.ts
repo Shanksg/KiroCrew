@@ -295,6 +295,23 @@ describe('visibility: the OR of every card instance showing the current turn, an
     expect(writes.visibility.mock.calls.at(-1)).toEqual([S, true])
     spy.mockRestore()
   })
+
+  it.each([
+    ['a write that did not arrive is sent again', new Error('offline'), 3],
+    ['a closed chat\'s unknown_session is not sent again', Object.assign(new Error('gone'), { status: 404, body: '{"code":"unknown_session"}' }), 2],
+  ])('%s on the next tab switch', async (_name, refusal, calls) => {
+    browserLiveStore.applyEvent(ev())
+    browserLiveStore.setVisible(S, 'card-1', true, 't1')
+    writes.visibility.mockRejectedValueOnce(refusal)
+    browserLiveStore.setVisible(S, 'card-1', false, 't1')
+    // The store's own catch was attached first, so it has run once this settles.
+    await expect(writes.visibility.mock.results[1].value).rejects.toBe(refusal)
+    const spy = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    document.dispatchEvent(new Event('visibilitychange'))
+    spy.mockRestore()
+    expect(writes.visibility).toHaveBeenCalledTimes(calls)
+    expect(writes.visibility.mock.calls.at(-1)).toEqual([S, false])
+  })
 })
 
 describe('claim and release', () => {

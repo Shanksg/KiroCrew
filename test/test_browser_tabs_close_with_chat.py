@@ -97,6 +97,10 @@ async def test_ending_one_chat_closes_only_its_own_tabs(
         ("Target.closeTarget", {"targetId": "T-a2"}),
     ]
     assert relay.agent_targets() == ["T-b"]
+    # No newly connected tab is sent the closed chat's card, whose routes would
+    # refuse it 404 unknown_session; the other chat's card stays.
+    assert hub.get("chat-a") is None
+    assert hub.get("chat-b") is not None
 
 
 async def test_a_chat_resumed_before_the_close_runs_keeps_its_tabs(
@@ -109,6 +113,7 @@ async def test_a_chat_resumed_before_the_close_runs_keeps_its_tabs(
     await await_until(asyncio.gather(*state._background_tasks), what="the chat's tab close")
     assert sent == []
     assert relay.agent_targets() == ["T-a", "T-b"]
+    assert live_hub.get_live_hub().get("chat-a") is not None
 
 
 @pytest.mark.parametrize("path", ["tab_close", "idle_cleanup"])
