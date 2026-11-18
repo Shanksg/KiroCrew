@@ -1108,6 +1108,26 @@ class SessionAgentRunner:
                             {"kind": "tool", "tool": tool or "tool", "detail": "refused"}
                         )
                         continue
+                    # An organisation's ``ask`` on a KAS web call (``web_ask_rule``):
+                    # this unattended loop has nobody to ask, so it is refused.
+                    from kiro_crew.web_ask_rule import unattended_refusal
+
+                    _web_refusal = unattended_refusal(ev)
+                    if _web_refusal:
+                        await self._reject(
+                            provider,
+                            rid,
+                            tool=tool,
+                            session_key=session_key,
+                            event=ev,
+                            cause=DENY_CAUSE_SURFACE_POLICY,
+                            reason=_web_refusal,
+                            error="web_ask_rule",
+                        )
+                        self._emit_activity(
+                            {"kind": "tool", "tool": tool or "tool", "detail": "refused"}
+                        )
+                        continue
                     await self._approve(provider, rid, tool=tool, session_key=session_key, event=ev)
                     if tool:
                         text_buf.flush()  # close the current thought before the tool line

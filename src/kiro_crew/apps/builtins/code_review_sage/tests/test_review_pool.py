@@ -374,6 +374,48 @@ class TestApprovalAndAudit(unittest.IsolatedAsyncioTestCase):
         self.assertIn("User denied tool execution", notice)
         self.assertIn("private repo", notice)
 
+    async def test_an_org_ask_on_a_kas_web_call_is_refused(self):
+        """``web_ask_rule``: no person reviews these calls, so in LTS KAS's ask on an
+        organisation's web rule is refused instead of approved."""
+        from types import SimpleNamespace
+
+        from kiro_crew import web_ask_rule
+
+        for edition in ("lts", "oss"):
+            trace: list = []
+
+            async def _reject(_handle, request_id):
+                trace.append(("reject", request_id))
+
+            async def _approve(_handle, request_id, option_id=None):
+                trace.append(("approve", request_id))
+
+            script = [
+                _ev(
+                    rp.EVENT_PERMISSION_REQUEST,
+                    request_id="r-web",
+                    title="Fetching https://example.com",
+                    tool_kind="fetch",
+                    harness_tool_id="web_fetch",
+                    kas_builtin_ids=True,
+                    kas_managed_ask=True,
+                )
+            ]
+            _install_fake_runtime(self, script=script)
+            with unittest.mock.patch.object(
+                web_ask_rule, "edition", SimpleNamespace(is_lts=lambda e=edition: e == "lts")
+            ), unittest.mock.patch.object(
+                rp, "refusal_for", lambda *_a, **_kw: None
+            ), unittest.mock.patch.object(
+                FakeHandle, "reject_tool", _reject
+            ), unittest.mock.patch.object(FakeHandle, "approve_tool", _approve):
+                pool = ReviewPool(work_dir=_work_dir(self))
+                await pool.begin_batch()
+                await pool.send("t")
+                await pool.end_batch()
+            expected = "reject" if edition == "lts" else "approve"
+            self.assertEqual(trace, [(expected, "r-web")], edition)
+
     async def test_policy_deny_audit_survives_reject_failure(self):
         calls: list = []
 

@@ -130,6 +130,14 @@ except Exception:  # pragma: no cover - standalone / test fallback
     DENY_CAUSE_POLICY = "policy"
     _steer_host_deny = None  # type: ignore[assignment]
 
+try:  # an organisation's ``ask`` on a KAS web call, refused with nobody to ask
+    from kiro_crew.web_ask_rule import unattended_refusal as _web_ask_refusal
+except Exception:  # pragma: no cover - standalone fallback: refusal_for refuses all
+
+    def _web_ask_refusal(event: Any) -> str:
+        return ""
+
+
 try:  # same resolver the AcpRuntime spawn path uses to locate the agent CLI
     from kiro_crew.kiro_cli import resolve_kiro_cli
 except Exception:  # pragma: no cover - standalone / test fallback
@@ -839,6 +847,10 @@ class ReviewPool:
                                 app="code-review-sage",
                                 security_only=False,
                             )
+                            if reason is None:
+                                # No person reviews these calls: an organisation's
+                                # ``ask`` on a KAS web call is refused here.
+                                reason = _web_ask_refusal(ev) or None
                             if reason is not None:
                                 await self._audit_tool(
                                     handle,

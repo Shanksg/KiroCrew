@@ -391,6 +391,8 @@ _RUNNER_FUNNEL_SITES = (
     _Site("governance: %s", "gov_cause"),  # policy or hook_error, named by the gate
     _Site("shell denylist judged the command", "DENY_CAUSE_POLICY"),
     _Site("caller's allowlist is what this SURFACE permits", "DENY_CAUSE_SURFACE_POLICY"),
+    # An organisation's web ``ask`` (``web_ask_rule``): nobody to ask on this loop.
+    _Site("this unattended loop has nobody to ask", "DENY_CAUSE_SURFACE_POLICY"),
 )
 #: Wire rejects outside the funnel: ``_approve``'s audit-or-deny arm.
 _RUNNER_DIRECT_SITES = (_Site("rejecting instead of approving", "DENY_CAUSE_AUDIT_UNAVAILABLE"),)
@@ -519,3 +521,29 @@ class TestTheRunnerDeniesThroughOneSteeringFunnel:
             # call; never read back past the previous call.
             out.append((i, _site_for(_RUNNER_FUNNEL_SITES, lines, max(0, i - 12), i + 1)))
         return out
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("edition", ["lts", "oss"])
+async def test_an_org_ask_on_a_kas_web_call_is_refused_by_the_loop(monkeypatch, fake_sel, edition):
+    """``web_ask_rule``: this unattended loop has nobody to ask, so in LTS KAS's ask on
+    an organisation's web rule is refused; an ``oss`` build approves it as before."""
+    from kiro_crew import web_ask_rule
+
+    monkeypatch.setattr(web_ask_rule, "edition", SimpleNamespace(is_lts=lambda: edition == "lts"))
+    monkeypatch.setattr(R, "_governance_denial", lambda ev, **kw: "")
+    provider = _Provider(
+        _permission_then_complete(
+            tool_kind="fetch",
+            title="Fetching https://example.com",
+            harness_tool_id="web_fetch",
+            kas_builtin_ids=True,
+            kas_managed_ask=True,
+        )
+    )
+    await _drive(provider)
+    if edition == "lts":
+        _assert_steered_then_rejected(provider, _SURFACE_CLAUSE, "policy asks before web fetch")
+        assert fake_sel.calls[0]["error"] == "web_ask_rule"
+    else:
+        assert provider.calls == ["approve"]
