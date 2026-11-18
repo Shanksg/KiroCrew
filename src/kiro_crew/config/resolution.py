@@ -94,6 +94,7 @@ _KNOWN_CONFIG_SECTIONS: frozenset = frozenset(
         "timezone",
         "auto_update",
         "registries",
+        "market_registries",
         "connections_ui",
     }
 )
