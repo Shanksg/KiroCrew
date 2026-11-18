@@ -216,7 +216,8 @@ describe('SlackPanel connection status', () => {
 describe('SlackPanel manifest card', () => {
   it('links the one-click create URL and copies the YAML, reverting the pill after 1.5s', async () => {
     const writeText = stubClipboard(() => Promise.resolve())
-    seed()
+    // Connected: the setup wizard starts closed, so the panel's own card shows.
+    seed({ connected: true })
     await hydrated()
 
     expect(screen.getByRole('link', { name: 'Create Slack app' })).toHaveAttribute('href', MANIFEST.create_url)
@@ -232,7 +233,8 @@ describe('SlackPanel manifest card', () => {
 
   it('keeps the pill unchanged when the clipboard write is refused', async () => {
     stubClipboard(() => Promise.reject(new Error('clipboard denied')))
-    seed()
+    // Connected: the setup wizard starts closed, so the panel's own card shows.
+    seed({ connected: true })
     await hydrated()
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy manifest YAML' }))
@@ -243,7 +245,7 @@ describe('SlackPanel manifest card', () => {
 
   it('inertly disables create + copy while the manifest is unavailable', async () => {
     const writeText = stubClipboard(() => Promise.resolve())
-    seed({}, { manifestFails: true })
+    seed({ connected: true }, { manifestFails: true })
     await hydrated()
 
     const create = screen.getByRole('link', { name: 'Create Slack app' })

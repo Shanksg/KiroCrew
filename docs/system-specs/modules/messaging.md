@@ -3953,9 +3953,15 @@ dashboard token auth.
   (`slack_manifest.slash_command(alias)`). It writes no config: the gateway
   answers `/kirocrew` and every `/kirocrew-<alias>` as they are, and a caller
   that passes `?alias=` saves the returned name as `slack.command` (live, no
-  restart) so a later no-alias render keeps it. Settings →
-  Messaging Channels → Slack passes no alias, so its one-click app registers
-  `/kirocrew`.
+  restart) so a later no-alias render keeps it. The Slack panel's own form
+  passes no alias, so its one-click app registers `/kirocrew`; the setup
+  wizard passes the alias the user typed and saves the returned `command`.
+  The body also carries `org_guide_url`: `slack.setup_guide_url` when it is
+  an `https://` URL with a host and no credentials, else `null`.
+- `GET /api/slack/manifest/status` also returns `app_basic_info_url` (the
+  app's Basic Information page, where app-level tokens are generated) and
+  `app_dm_url` (`https://slack.com/app_redirect?app=<A>[&team=<T>]`, the bot's
+  DM), both built only from regex-checked ids and `null` without a bot token.
 
 `allowed_users` / `open_channels` are intentionally not exposed while the
 runtime enforces owner-only access.
