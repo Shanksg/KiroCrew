@@ -447,31 +447,25 @@ class RunEventCoordinator(ManagerComponent):
         )
 
     def _has_live_parent_run_task(self, parent_session_key: str, *, exclude_id: str = "") -> bool:
-        """Whether a parent-owned run can still register its terminal report.
+        """Whether an actual outer run task still owns work for this parent.
 
-        ``_run_inner`` publishes ``info.done`` before ``_run_impl`` resumes its
-        ``finally`` and registers the report task. During that scheduling gap the
-        ordinary ``running`` view is empty, but the outer task is still live.
-        Keep the parent pending until that task is removed; by then the report is
-        registered in ``_report_owners`` and the delivery barrier owns the wait.
+        Task ownership spans the inner done flip, report delivery and any remaining
+        cleanup, independently of run-record eviction and the run-id task index.
+        Completed tasks do not count while their removal callbacks are pending.
         """
-        for info in self._manager._agents.values():
-            if info.parent_session_key != parent_session_key or info.id == exclude_id:
-                continue
-            task = self._manager._tasks.get(info.id)
-            if task is not None and not task.done():
-                return True
-        return False
+        return any(
+            parent == parent_session_key and run_id != exclude_id and not task.done()
+            for task, (run_id, parent) in self._manager._run_task_owners.items()
+        )
 
     def has_unfinished_report_for_impl(self, parent_session_key: str) -> bool:
         """Whether a terminal report owned by *parent_session_key* is still running.
 
-        The span after :meth:`_has_live_parent_run_task` goes false: the run's
-        task is gone, and its report sits in ``_report_owners`` until delivery
-        resolves -- for a reaped run, across the reap's reset and kill awaits. A
-        parent teardown in that span marks the child teardown-cancelled and the
-        report skips ``_on_done``, so a caller deciding whether a parent may be
-        torn down must count it. Synchronous, in-memory, loop-safe.
+        Reports retain their own ownership until delivery resolves, independently
+        of the outer run task -- for a reaped run, across the reap's reset and kill
+        awaits. A parent teardown in that span marks the child teardown-cancelled
+        and the report skips ``_on_done``, so a caller deciding whether a parent may
+        be torn down must count it. Synchronous, in-memory, loop-safe.
         """
         if not parent_session_key:
             return False
@@ -487,6 +481,28 @@ class RunEventCoordinator(ManagerComponent):
         return any(
             not task.done() and parents.get(run_id) == parent_session_key
             for run_id, task in watchers.items()
+        )
+
+    def has_current_execution_for_impl(self, parent_session_key: str) -> bool:
+        """Whether this parent owns executing or finalizing subagent work.
+
+        Queue entries and parked spawn approvals are not execution. A live outer
+        run covers the done-to-report gap and cleanup after report settlement;
+        task ownership, reports and follow-up watchers survive run-record eviction.
+        All reads are in memory and synchronous on the gateway loop.
+        """
+        from kiro_crew.subagent import _parked_at_spawn_approval
+
+        return (
+            self._has_live_parent_run_task(parent_session_key)
+            or self._has_live_parent_followup_watcher(parent_session_key)
+            or self.has_unfinished_report_for_impl(parent_session_key)
+            or any(
+                not info.done
+                and info.parent_session_key == parent_session_key
+                and not _parked_at_spawn_approval(info)
+                for info in self._manager._agents.values()
+            )
         )
 
     def has_in_memory_pending_work_for_impl(
