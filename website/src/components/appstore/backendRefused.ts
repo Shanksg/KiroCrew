@@ -38,3 +38,24 @@ export function appActionNotice(name: string, result: unknown, action: 'enable' 
   const warned = warnings.length ? i18nT(key, { name, warnings: warnings.join('; ') }) : ''
   return joinSentences([refused, warned])
 }
+
+/**
+ * The warning to show when uninstall succeeds but some Bot chats using the app
+ * could not be stopped.  Empty when no slugs are listed.
+ * Pass an optional `resolveSlug` to convert raw slugs to display names.
+ */
+export function uninstallBotChatStopFailedNotice(
+  name: string,
+  result: unknown,
+  resolveSlug?: (slug: string) => string,
+): string {
+  const raw = result && typeof result === 'object' ? (result as { bot_chat_stop_failed?: unknown }).bot_chat_stop_failed : undefined
+  const failed = Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string') : []
+  if (!failed.length) return ''
+  const display = resolveSlug ? failed.map(resolveSlug) : failed
+  const slugs = display.join(', ')
+  const key = failed.length === 1
+    ? 'pages.appsPage.uninstall_bot_chat_stop_failed_one'
+    : 'pages.appsPage.uninstall_bot_chat_stop_failed_other'
+  return i18nT(key, { name, slugs })
+}

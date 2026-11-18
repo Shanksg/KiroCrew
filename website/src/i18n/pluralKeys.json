@@ -579,5 +579,7 @@
   "components.promptStash.clear_others",
   "components.promptStash.clear_others_confirm",
   "components.promptStash.cleared_others",
-  "components.promptStash.discarded"
+  "components.promptStash.discarded",
+  "pages.appsPage.bot_chat_stop_incomplete_revoked",
+  "pages.appsPage.uninstall_bot_chat_stop_failed"
 ]

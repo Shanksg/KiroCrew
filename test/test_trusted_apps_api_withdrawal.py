@@ -1080,3 +1080,62 @@ async def test_a_pending_config_json_is_refused_before_any_teardown(
     record = _read_installed(_APP)
     assert record is not None and record.enabled is True
     assert lp.leaf_pending(lp.LEAF_CONFIG)
+
+
+@pytest.mark.asyncio
+async def test_teardown_incomplete_409_clears_revocation_fence(
+    home: Path, tmp_path: Path, mock_sel, monkeypatch: pytest.MonkeyPatch
+):
+    """When teardown_app_runtime fails, the teardown_incomplete 409 must lower the fence.
+
+    Flow:
+    1. The handler calls revoke_app_generation, which raises the revocation fence.
+    2. teardown_app_runtime returns a failure, so the handler returns 409.
+    3. Because the grant is kept for a retry, the fence MUST be cleared here.
+       If it is not, every Bot chat start voids that app's tools through the
+       fenced_apps check until a gateway restart.
+
+    Remove the _revocation_fence_clear call before the teardown_incomplete return
+    and the fence stays up after the 409, which is what this test asserts against.
+    """
+    from unittest.mock import AsyncMock as _AsyncMock
+
+    import kiro_crew.apps.teardown as appteardown
+    from kiro_crew import bot_chat_app_tools as tools
+
+    async def _teardown_fails(name: str, record: dict, **_kw: object) -> dict:
+        # Simulate a port still listening — a hard teardown failure.
+        return {"app_backend": "failed: port 9999 still open"}
+
+    _install(tmp_path, _APP, enabled=True)
+    with (
+        patch.object(appteardown, "on_app_disable", _AsyncMock(return_value={"ok": True})),
+        patch.object(appteardown, "stop_app_backend", lambda name: True),
+        patch.object(appteardown, "deregister_app", lambda name: None),
+    ):
+        async with _client() as client:
+            assert (await client.post(f"/api/security/trusted-apps/{_APP}")).status == 200
+
+            async def _replace_teardown(name, record, **kw):
+                return type(
+                    "_Result",
+                    (),
+                    {"ok": False, "failures": ["port 9999 still open"], "warnings": []},
+                )()
+
+            from kiro_crew.dashboard.handlers import security as security_mod
+
+            monkeypatch.setattr(security_mod, "teardown_app_runtime", _replace_teardown)
+
+            resp = await client.delete(f"/api/security/trusted-apps/{_APP}")
+            assert resp.status == 409
+            body = await resp.json()
+            assert body["code"] == "teardown_incomplete"
+
+    # The fence must be cleared after the teardown_incomplete 409.
+    # Remove the _revocation_fence_clear call before the early return and this fails.
+    assert _APP not in tools._REVOCATION_FENCE, (
+        "revocation fence must be cleared on teardown_incomplete 409; "
+        "remove the _revocation_fence_clear call before the return and fence stays up, "
+        "blocking Bot tools until gateway restart"
+    )

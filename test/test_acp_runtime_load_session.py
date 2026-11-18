@@ -1394,3 +1394,46 @@ async def test_the_kas_keep_record_reentry_forwards_every_keyword(monkeypatch):
     reentry.assert_awaited_once()
     forwarded = reentry.await_args.kwargs
     assert {name: forwarded.get(name) for name in keywords} == given
+
+
+@pytest.mark.asyncio
+async def test_evict_session_confirms_on_acp_runtime_error_with_rpc_error(monkeypatch):
+    """evict_session must count an AcpRuntimeError whose rpc_error is set as confirmed.
+
+    ``_runtime_rpc_exception`` raises ``AcpRuntimeError(Exception)`` (not a subclass
+    of ``transport_errors.AcpError``) when the host answers with a JSON-RPC error
+    frame.  Before this fix, that exception fell through to ``except Exception`` and
+    ``confirmed`` stayed False, so ``_unconfirmed_teardowns`` was never cleared and
+    ``_drain_pending_close`` could never confirm the handle.
+
+    Remove the ``except _AcpRuntimeError`` branch in ``evict_session`` and
+    ``confirmed`` stays False, the discard on ``_unconfirmed_teardowns`` never runs,
+    and the final assertions fail.
+    """
+    from kiro_crew.acp.session_handle_runtime_contract import AcpRuntimeError as _AcpRuntimeError
+
+    rt, _, _ = _make_runtime()
+    sid = "kas-rpc-error-sid-001"
+
+    rpc_error_obj = {"code": -32600, "message": "Session not found"}
+
+    async def _fake_send(method, params, timeout=None):
+        exc = _AcpRuntimeError("host rejected session")
+        exc.rpc_error = rpc_error_obj
+        raise exc
+
+    monkeypatch.setattr(rt, "_send_and_await", _fake_send)
+
+    # unregister_session needs the queue to exist.
+    rt._session_queues[sid] = asyncio.Queue()
+
+    result = await rt.evict_session(sid)
+
+    assert result is True, (
+        "AcpRuntimeError with rpc_error set must be treated as confirmed; "
+        "remove the except _AcpRuntimeError branch and result is False"
+    )
+    assert sid not in rt._unconfirmed_teardowns, (
+        "confirmed eviction must discard sid from _unconfirmed_teardowns; "
+        "remove the _unconfirmed_teardowns.discard call in the new branch and this fails"
+    )

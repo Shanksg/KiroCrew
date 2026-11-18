@@ -113,6 +113,7 @@ def _fresh_record(_floor_monkeypatch):
     _floor_monkeypatch.setattr(tools, "_VOIDED_DELIVERY", {})
     _floor_monkeypatch.setattr(tools, "_PENDING_CLOSE", {})
     _floor_monkeypatch.setattr(tools, "_PENDING_CLOSE_APPS", set())
+    _floor_monkeypatch.setattr(tools, "_PENDING_CLOSE_RETRIES", {})
     _floor_monkeypatch.setattr(tools, "_REVOCATION_FENCE", set())
     _floor_monkeypatch.setattr(tools, "_RECONCILER", None)
     _floor_monkeypatch.setattr(tools, "_PROJECTION_GENS", {})
@@ -1553,7 +1554,7 @@ async def test_stop_app_bot_chat_servers_is_not_called_when_uninstall_is_rejecte
 
     stop_calls: list[str] = []
 
-    async def _fake_stop(state: object, app_name: str) -> tuple:
+    async def _fake_stop(state: object, app_name: str, *, hold_fence: bool = False) -> tuple:
         stop_calls.append(app_name)
         return [], []
 
@@ -1697,7 +1698,7 @@ async def test_granting_trust_does_not_stop_bot_chats(world, monkeypatch):
 
     stop_calls: list[str] = []
 
-    async def _fake_stop(state, app_name):
+    async def _fake_stop(state, app_name, *, hold_fence: bool = False):
         stop_calls.append(app_name)
         return [], []
 

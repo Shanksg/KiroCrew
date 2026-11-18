@@ -308,7 +308,7 @@ def keep_record_on_teardown(self: AcpRuntime, session_id: str) -> _RecordKeeping
     return _RecordKeepingScope(self, session_id)
 
 
-async def evict_session(self: AcpRuntime, session_id: str) -> None:
+async def evict_session(self: AcpRuntime, session_id: str) -> bool:
     """Make the host drop a RESIDENT session while keeping its stored record.
 
     The standard ``session/close`` as a bounded request, then the local
@@ -325,15 +325,70 @@ async def evict_session(self: AcpRuntime, session_id: str) -> None:
     hold) is the state this call was reaching for. The local unregister always
     runs, so the reader loop stops routing to the departing queue even when the
     request could not be delivered.
+
+    Returns ``True`` when ``session/close`` was acknowledged by the host, when
+    the host rejects the id (it does not hold the session), or when the
+    runtime was already dead (the resident copy is gone regardless).
+    Returns ``False`` when the request timed out or failed with an unknown
+    error: the session may still be resident; callers that need a confirmed
+    teardown should treat ``False`` as unconfirmed.
     """
+    from kiro_crew.acp.session_handle_runtime_contract import AcpRuntimeDead as _AcpRuntimeDead
+    from kiro_crew.acp.session_handle_runtime_contract import AcpRuntimeError as _AcpRuntimeError
+    from kiro_crew.acp.transport_errors import AcpError as _AcpError
+
+    confirmed = True
     try:
         if not self._dead and self._process is not None:
             self._unconfirmed_teardowns.add(session_id)
+            confirmed = False  # Assume unconfirmed until the host responds.
             try:
                 await self._send_and_await(
                     METHOD_SESSION_CLOSE, {"sessionId": session_id}, timeout=_TERMINATE_TIMEOUT
                 )
                 self._unconfirmed_teardowns.discard(session_id)
+                confirmed = True
+            except _AcpError as exc:
+                # Host answered with a JSON-RPC error.  It does not hold this id,
+                # so the session is already freed — count as confirmed.
+                if getattr(exc, "code", None) is not None:
+                    logger.debug(
+                        "session/close for %s rejected by host (code %s); session already freed",
+                        session_id,
+                        exc.code,
+                    )
+                    confirmed = True
+                else:
+                    logger.debug(
+                        "session/close failed for %s (AcpError, no code); proceeding with local unregister",
+                        session_id,
+                        exc_info=True,
+                    )
+            except _AcpRuntimeDead:
+                # Runtime exited — the resident copy is gone with the process.
+                logger.debug(
+                    "session/close for %s skipped: runtime is dead; session is gone",
+                    session_id,
+                )
+                confirmed = True
+            except _AcpRuntimeError as exc:
+                # _runtime_rpc_exception raises AcpRuntimeError (not a subclass of
+                # AcpError) when the host answers with a JSON-RPC error frame.
+                # rpc_error being set means the host has the session closed, so it
+                # does not hold this session — count as confirmed.
+                if exc.rpc_error is not None:
+                    logger.debug(
+                        "session/close for %s rejected by host (rpc_error); session already freed",
+                        session_id,
+                    )
+                    self._unconfirmed_teardowns.discard(session_id)
+                    confirmed = True
+                else:
+                    logger.debug(
+                        "session/close failed for %s (AcpRuntimeError, no rpc_error); proceeding with local unregister",
+                        session_id,
+                        exc_info=True,
+                    )
             except Exception:
                 logger.debug(
                     "session/close failed for %s (runtime dead/slow); proceeding with local unregister",
@@ -347,6 +402,7 @@ async def evict_session(self: AcpRuntime, session_id: str) -> None:
         harness_state = self._session_harness_states.pop(session_id, None)
         if harness_state is not None:
             await self._harness.end_session(harness_state)
+    return confirmed
 
 
 def can_release(self: AcpRuntime) -> bool:
