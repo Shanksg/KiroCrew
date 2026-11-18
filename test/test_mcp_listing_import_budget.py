@@ -77,11 +77,14 @@ FORBIDDEN_BEFORE_THE_LIST = (
 #: Raised by 1 again for all four: the ssh-to-self floor's substitution-body check lives in
 #: its own module, ``kiro_crew.security.argv_floor_ssh_bodies``, which the deny floor that
 #: every listing already loads imports.
+#: Raised by 1 again for all four: the ssh-to-self floor's choice of which here-document
+#: bodies are data lives in its own module, ``kiro_crew.security.argv_floor_ssh_heredoc``,
+#: which the ssh floor imports; the module count rose by that one file and nothing new loads.
 PACKAGE_MODULE_CEILING = {
-    "mcp-core": 490,
-    "mcp-cron": 360,
-    "mcp-guide": 354,
-    "mcp-mate": 355,
+    "mcp-core": 491,
+    "mcp-cron": 361,
+    "mcp-guide": 355,
+    "mcp-mate": 356,
 }
 
 #: The modules that read the two live values in the spawn tools' descriptions. They are
