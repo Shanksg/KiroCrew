@@ -21393,6 +21393,27 @@
         "config_load_failed": "Impossible de charger les réglages des compétences. Les interrupteurs affichent les valeurs par défaut, pas celles enregistrées.",
         "review_pending_candidates_on_agent_capabilities": "Examiner les candidats en attente dans Personnaliser → Compétences"
       },
+      "slackOwnerClaim": {
+        "title": "Revendiquer la propriété depuis Slack",
+        "intro": "Au lieu de coller votre ID de membre, envoyez un message direct au bot dans Slack et confirmez-le ici.",
+        "start": "Revendiquer dans Slack",
+        "starting": "Connexion…",
+        "needs_tokens": "Enregistrez d’abord le jeton du bot et le jeton de l’app.",
+        "open_hint": "Ouvrez Slack et envoyez n’importe quel message direct au bot, puis confirmez-vous ci-dessous. Fermeture à {{time}}.",
+        "waiting": "En attente d’un message…",
+        "multiple_warning": "Plusieurs personnes ont envoyé un message. Vérifiez le texte avant de confirmer.",
+        "received": "Envoyé à {{time}}",
+        "confirm": "C’est moi",
+        "cancel": "Annuler",
+        "ignored": "Messages ignorés : {{total}}",
+        "confirmed": "Vous êtes maintenant le propriétaire.",
+        "owner_handle": "Propriétaire : @{{handle}} ({{workspace}})",
+        "owner_id": "Propriétaire : {{id}}",
+        "clear": "Retirer le propriétaire",
+        "cleared_restart": "Propriétaire retiré. Redémarrez la passerelle pour l’appliquer.",
+        "error_owner_set": "Un propriétaire est déjà défini. Retirez-le et redémarrez d’abord la passerelle.",
+        "error_failed": "Cela n’a pas fonctionné ({{reason}})."
+      },
       "slackPanel": {
         "add": "Ajouter",
         "allowed_enterprise_orgs": "Organisations Enterprise autorisées",

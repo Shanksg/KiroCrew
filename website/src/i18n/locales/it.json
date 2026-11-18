@@ -21393,6 +21393,27 @@
         "config_load_failed": "Impossibile caricare le impostazioni delle skill. Gli interruttori mostrano i valori predefiniti, non quelli salvati.",
         "review_pending_candidates_on_agent_capabilities": "Esamina i candidati in attesa in Personalizza → Competenze"
       },
+      "slackOwnerClaim": {
+        "title": "Rivendica la proprietà da Slack",
+        "intro": "Invece di incollare il tuo ID membro, invia un messaggio diretto al bot in Slack e confermalo qui.",
+        "start": "Rivendica in Slack",
+        "starting": "Connessione…",
+        "needs_tokens": "Salva prima il token del bot e il token dell’app.",
+        "open_hint": "Apri Slack e invia al bot un qualsiasi messaggio diretto, poi conferma te stesso qui sotto. Si chiude alle {{time}}.",
+        "waiting": "In attesa di un messaggio…",
+        "multiple_warning": "Più di una persona ha inviato un messaggio. Controlla il testo prima di confermare.",
+        "received": "Inviato alle {{time}}",
+        "confirm": "Sono io",
+        "cancel": "Annulla",
+        "ignored": "Messaggi ignorati: {{total}}",
+        "confirmed": "Ora sei il proprietario.",
+        "owner_handle": "Proprietario: @{{handle}} ({{workspace}})",
+        "owner_id": "Proprietario: {{id}}",
+        "clear": "Rimuovi proprietario",
+        "cleared_restart": "Proprietario rimosso. Riavvia il gateway per applicarlo.",
+        "error_owner_set": "Un proprietario è già impostato. Rimuovilo e riavvia prima il gateway.",
+        "error_failed": "Non ha funzionato ({{reason}})."
+      },
       "slackPanel": {
         "add": "Aggiungi",
         "allowed_enterprise_orgs": "Organizzazioni enterprise consentite",

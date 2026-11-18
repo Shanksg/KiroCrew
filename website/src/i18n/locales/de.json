@@ -20850,6 +20850,27 @@
         "config_load_failed": "Die Skill-Einstellungen konnten nicht geladen werden. Die Schalter zeigen Standardwerte, nicht die gespeicherten.",
         "review_pending_candidates_on_agent_capabilities": "Ausstehende Kandidaten unter „Anpassen → Fähigkeiten“ prüfen"
       },
+      "slackOwnerClaim": {
+        "title": "Eigentümerschaft über Slack beanspruchen",
+        "intro": "Statt deine Mitglieds-ID einzufügen, sende dem Bot in Slack eine Direktnachricht und bestätige sie hier.",
+        "start": "In Slack beanspruchen",
+        "starting": "Verbinde…",
+        "needs_tokens": "Speichere zuerst das Bot-Token und das App-Token.",
+        "open_hint": "Öffne Slack und sende dem Bot eine beliebige Direktnachricht, dann bestätige dich unten. Schließt um {{time}}.",
+        "waiting": "Warte auf eine Nachricht…",
+        "multiple_warning": "Mehr als eine Person hat eine Nachricht gesendet. Prüfe den Text, bevor du bestätigst.",
+        "received": "Gesendet um {{time}}",
+        "confirm": "Das bin ich",
+        "cancel": "Abbrechen",
+        "ignored": "Ignorierte Nachrichten: {{total}}",
+        "confirmed": "Du bist jetzt der Eigentümer.",
+        "owner_handle": "Eigentümer: @{{handle}} ({{workspace}})",
+        "owner_id": "Eigentümer: {{id}}",
+        "clear": "Eigentümer entfernen",
+        "cleared_restart": "Eigentümer entfernt. Starte das Gateway neu, um es anzuwenden.",
+        "error_owner_set": "Es ist bereits ein Eigentümer gesetzt. Entferne ihn und starte zuerst das Gateway neu.",
+        "error_failed": "Das hat nicht geklappt ({{reason}})."
+      },
       "slackPanel": {
         "add": "Hinzufügen",
         "allowed_enterprise_orgs": "Erlaubte Enterprise-Organisationen",

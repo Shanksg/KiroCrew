@@ -31,6 +31,7 @@ if TYPE_CHECKING:
         run_to_completion,
         stored_folder_name,
     )
+    from kiro_crew.slack.owner_claim import OwnerClaim
 
 
 async def _validate_slack_token(key: str, token: str) -> str | None:
@@ -373,6 +374,11 @@ async def _slack_config_save_locked(request: web.Request) -> web.Response:
             # save changes nothing (see _write_env_or_roll_back).
             rollback = functools.partial(_cfg_write.rollback, "Slack") if staged else None
             await _write_env_or_roll_back(env_updates, rollback)
+            # Any Slack credential write closes an open owner-claim window: a
+            # new token may name another workspace than the one it pinned.
+            _claim = getattr(request.app.get("state"), "slack_owner_claim", None)
+            if _claim is not None:
+                _claim.close_soon("credential_write")
 
     # Create the configured session folder now, on this user-initiated save,
     # so the reconcile path never has to write the folder store. Best-effort:
@@ -619,3 +625,107 @@ async def api_slack_reconnect(request: web.Request) -> web.Response:
             "connect_error": str(result.get("connect_error", ""))[:120],
         }
     )
+
+
+# ── Owner claim: /api/slack/owner-claim (see kiro_crew.slack.owner_claim) ──────
+
+
+def _owner_claim_gate(request: web.Request, operation: str) -> OwnerClaim | web.Response:
+    """The gateway's claim window, or the refusal: remote 403, no claim window here 503.
+
+    Every owner-claim route is direct-local only, the GET included: the
+    candidates it lists (names, text) must not reach a remote viewer.
+    """
+    caller = request.get("user", "dashboard")
+    if not is_direct_local_request(request):
+        code, msg, status = "remote_read_only", "local machine only", 403
+    elif getattr(request.app["state"], "slack_owner_claim", None) is None:
+        code, msg, status = "slack_reconnect_unavailable", "no Slack connection here", 503
+    else:
+        claim: OwnerClaim = request.app["state"].slack_owner_claim
+        return claim
+    _sel().log_api_access(
+        caller=caller, operation=operation, outcome="denied", source="dashboard", error=code
+    )
+    return web.json_response({"error": msg, "code": code}, status=status)
+
+
+def _owner_claim_refused(exc: Exception) -> web.Response:
+    code = str(getattr(exc, "code", "refused"))
+    return web.json_response({"error": code, "code": code}, status=getattr(exc, "status", 409))
+
+
+async def api_slack_owner_claim_get(request: web.Request) -> web.Response:
+    """GET /api/slack/owner-claim — the window and its candidates. Direct-local only."""
+    claim = _owner_claim_gate(request, "slack.owner_claim.read")
+    if isinstance(claim, web.Response):
+        return claim
+    return web.json_response(claim.snapshot())
+
+
+async def api_slack_owner_claim_start(request: web.Request) -> web.Response:
+    """POST /api/slack/owner-claim/start — open the window and connect in claim mode."""
+    from kiro_crew.slack.owner_claim import ClaimRefused
+    from kiro_crew.slack.reconnect import CredentialStoreUnreadable
+
+    claim = _owner_claim_gate(request, "slack.owner_claim.start")
+    if isinstance(claim, web.Response):
+        return claim
+    try:
+        body = await claim.start()
+    except ClaimRefused as exc:
+        return _owner_claim_refused(exc)
+    except CredentialStoreUnreadable:
+        code = "credential_store_unreadable"
+        return web.json_response({"error": code, "code": code}, status=500)
+    return web.json_response(body)
+
+
+async def api_slack_owner_claim_cancel(request: web.Request) -> web.Response:
+    """POST /api/slack/owner-claim/cancel — close the window and disconnect."""
+    claim = _owner_claim_gate(request, "slack.owner_claim.cancel")
+    if isinstance(claim, web.Response):
+        return claim
+    await claim.close("cancelled")
+    return web.json_response(claim.snapshot())
+
+
+async def api_slack_owner_claim_confirm(request: web.Request) -> web.Response:
+    """POST /api/slack/owner-claim/confirm ``{"user_id"}`` — make that candidate the owner.
+
+    Compare-then-write under ``_get_config_lock()`` (inside ``confirm``), then
+    the ordinary Reconnect, which accepts a first owner.
+    """
+    from kiro_crew.config.loader import CRED_OWNER_ID  # noqa: F811
+    from kiro_crew.slack.owner_claim import ClaimRefused
+    from kiro_crew.slack.reconnect import CredentialStoreUnreadable
+    from kiro_crew.validation import USER_ID_RE  # noqa: F811
+
+    claim = _owner_claim_gate(request, "slack.owner_claim.confirm")
+    if isinstance(claim, web.Response):
+        return claim
+    try:
+        body = await request.json()
+    except Exception:
+        body = None
+    user_id = body.get("user_id") if isinstance(body, dict) else None
+    if not isinstance(user_id, str) or not USER_ID_RE.match(user_id):
+        return web.json_response({"error": "user_id", "code": "invalid_user_id"}, status=400)
+
+    async def _write_owner(value: str) -> None:
+        await _write_env_or_roll_back({CRED_OWNER_ID: value}, None)
+
+    state = request.app["state"]
+    try:
+        result = await claim.confirm(
+            user_id,
+            write_owner=_write_owner,
+            reconnect=getattr(state, "slack_reconnect", None),
+        )
+    except ClaimRefused as exc:
+        return _owner_claim_refused(exc)
+    except CredentialStoreUnreadable:
+        code = "credential_store_unreadable"
+        return web.json_response({"error": code, "code": code}, status=500)
+    record_milestone_when("slack", "channel_connected:slack")
+    return web.json_response(result)

@@ -21393,6 +21393,27 @@
         "config_load_failed": "No se pudieron cargar los ajustes de habilidades. Los interruptores muestran valores predeterminados, no los guardados.",
         "review_pending_candidates_on_agent_capabilities": "Revisar los candidatos pendientes en Personalizar → Habilidades"
       },
+      "slackOwnerClaim": {
+        "title": "Reclamar la propiedad desde Slack",
+        "intro": "En lugar de pegar tu ID de miembro, envía un mensaje directo al bot en Slack y confírmalo aquí.",
+        "start": "Reclamar en Slack",
+        "starting": "Conectando…",
+        "needs_tokens": "Guarda primero el token del bot y el token de la app.",
+        "open_hint": "Abre Slack y envía al bot cualquier mensaje directo; luego confírmate abajo. Se cierra a las {{time}}.",
+        "waiting": "Esperando un mensaje…",
+        "multiple_warning": "Más de una persona envió un mensaje. Revisa el texto antes de confirmar.",
+        "received": "Enviado a las {{time}}",
+        "confirm": "Soy yo",
+        "cancel": "Cancelar",
+        "ignored": "Mensajes ignorados: {{total}}",
+        "confirmed": "Ahora eres el propietario.",
+        "owner_handle": "Propietario: @{{handle}} ({{workspace}})",
+        "owner_id": "Propietario: {{id}}",
+        "clear": "Quitar propietario",
+        "cleared_restart": "Propietario eliminado. Reinicia el gateway para aplicarlo.",
+        "error_owner_set": "Ya hay un propietario. Quítalo y reinicia el gateway primero.",
+        "error_failed": "No funcionó ({{reason}})."
+      },
       "slackPanel": {
         "add": "Añadir",
         "allowed_enterprise_orgs": "Organizaciones enterprise permitidas",

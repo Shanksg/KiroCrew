@@ -659,6 +659,11 @@ async def _on_slack_config_change(self: GatewayOrchestrator, change: ConfigChang
             "or run `kirocrew restart`, to apply the new Slack token or owner.",
             ", ".join(slack_cred_keys),
         )
+        # A credential written by any writer (the CLI included) closes an open
+        # owner-claim window, pinned as it is to the old token's workspace.
+        claim = getattr(self.dashboard_state, "slack_owner_claim", None)
+        if claim is not None:
+            claim.close_soon("credential_change")
     slack_paths = change.under("slack")
     if slack_paths and "slack" in new.degraded_sections:
         # Deferred, not dropped: the watcher retries these paths once the

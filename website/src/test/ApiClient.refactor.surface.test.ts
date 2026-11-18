@@ -217,6 +217,7 @@ const API_KEY_ORDER = [
   'sharedCrewAccess', 'sharedCrewAckFirstShare',
   'sharedCrewPreview', 'sharedCrewSetPreview',
   'sharedCrewCancelWork',
+  'getSlackOwnerClaim', 'startSlackOwnerClaim', 'cancelSlackOwnerClaim', 'confirmSlackOwnerClaim',
 ]
 
 const NESTED_KEY_ORDER: Record<string, string[]> = {

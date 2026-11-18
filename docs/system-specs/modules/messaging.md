@@ -3947,6 +3947,23 @@ dashboard token auth.
   boot's own `init_socket_mode` + `_connect_slack` have returned (the gateway
   publishes `DashboardState.slack_reconnect` only then, so a reconnect never
   opens a socket boot would replace without closing).
+- `GET /api/slack/owner-claim`, `POST /api/slack/owner-claim/start`,
+  `/cancel` and `/confirm` (`{"user_id"}`) — the owner-claim window
+  (`slack.owner_claim.OwnerClaim`, published as `DashboardState.slack_owner_claim`
+  beside `slack_reconnect`). All four, the GET included, are direct-local only
+  (remote 403 `remote_read_only`; 503 `slack_reconnect_unavailable` with no
+  socket owner), because the GET lists candidates' names and message text. No
+  other surface (`GET /api/slack/config`, page pushes, audit bodies) carries a
+  candidate. Start answers 409 `owner_set` when the gateway or the saved owner
+  is set, 409 `window_open`, 400 `tokens_missing`, `org_install_refused`,
+  `enterprise_validation_failed`, `denied_by_policy` or a Slack error, 502 when
+  the claim socket cannot connect. Confirm answers 400 `invalid_user_id`, 404
+  `not_a_candidate`, 409 `owner_set` / `credentials_changed` / `no_window`
+  (compare-then-write under the config lock), else `{owner_id, connected,
+  connect_error}` from the Reconnect it runs. The PUT closes an open window
+  whenever it writes a Slack credential; the gateway's Slack config watcher
+  does the same for a credential any other writer changes. Behaviour:
+  [slack-gateway § Owner claim](slack-gateway.md).
 - `GET /api/slack/manifest` — public manifest template rendered with
   `?alias=` (default `kirocrew`, never `$USER`) plus Slack's one-click
   create deep link and `command`, the slash command that manifest registers

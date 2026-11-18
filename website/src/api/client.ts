@@ -91,6 +91,8 @@ import { createMessagingEndpoints } from './client/messaging'
 import { createAutoResearchEndpoints } from './client/autoResearch'
 import { createBrowserLiveEndpoints } from './client/browserLive'
 import { createSharedCrewEndpoints } from './client/sharedCrew'
+import { createSlackOwnerClaimEndpoints } from './client/slackOwnerClaim'
+export type { SlackOwnerClaimCandidate, SlackOwnerClaimState } from './client/slackOwnerClaim'
 import type { DecisionsConsentData } from './client/decisions'
 
 export type { TunnelStatus } from './client/system'
@@ -1719,6 +1721,7 @@ const messaging = createMessagingEndpoints(transport)
 const autoResearch = createAutoResearchEndpoints(transport)
 const browserLive = createBrowserLiveEndpoints(transport)
 const sharedCrew = createSharedCrewEndpoints(transport)
+const slackOwnerClaim = createSlackOwnerClaimEndpoints(transport)
 
 // Spread in the order the methods have always had, so the key order is
 // unchanged. A key two segments both defined would silently take the later
@@ -1904,4 +1907,5 @@ export const api = {
   ...featureDiscovery.tips,
   ...browserLive.browserLive,
   ...sharedCrew.requests,
+  ...slackOwnerClaim.ownerClaim,
 }

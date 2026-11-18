@@ -20307,6 +20307,27 @@
         "config_load_failed": "スキル設定を読み込めませんでした。スイッチは保存値ではなくデフォルトを表示しています。",
         "review_pending_candidates_on_agent_capabilities": "「カスタマイズ → スキル」で保留中の候補をレビュー"
       },
+      "slackOwnerClaim": {
+        "title": "Slack でオーナーを登録",
+        "intro": "メンバー ID を貼り付ける代わりに、Slack でボットにダイレクトメッセージを送り、ここで確認します。",
+        "start": "Slack で登録",
+        "starting": "接続中…",
+        "needs_tokens": "先にボットトークンとアプリトークンを保存してください。",
+        "open_hint": "Slack を開いてボットに任意のダイレクトメッセージを送り、下で自分を確認してください。{{time}} に閉じます。",
+        "waiting": "メッセージを待っています…",
+        "multiple_warning": "複数の人がメッセージを送りました。確認する前に本文を確かめてください。",
+        "received": "{{time}} に送信",
+        "confirm": "自分です",
+        "cancel": "キャンセル",
+        "ignored": "無視したメッセージ: {{total}}",
+        "confirmed": "あなたがオーナーになりました。",
+        "owner_handle": "オーナー: @{{handle}}（{{workspace}}）",
+        "owner_id": "オーナー: {{id}}",
+        "clear": "オーナーを解除",
+        "cleared_restart": "オーナーを解除しました。反映するにはゲートウェイを再起動してください。",
+        "error_owner_set": "オーナーはすでに設定されています。先に解除してゲートウェイを再起動してください。",
+        "error_failed": "うまくいきませんでした（{{reason}}）。"
+      },
       "slackPanel": {
         "add": "追加",
         "allowed_enterprise_orgs": "許可されたエンタープライズ org",

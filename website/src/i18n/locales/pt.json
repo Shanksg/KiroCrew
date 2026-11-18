@@ -21393,6 +21393,27 @@
         "config_load_failed": "Não foi possível carregar as configurações de habilidades. Os interruptores mostram os padrões, não o que está salvo.",
         "review_pending_candidates_on_agent_capabilities": "Revisar os candidatos pendentes em Personalizar → Habilidades"
       },
+      "slackOwnerClaim": {
+        "title": "Reivindicar a propriedade pelo Slack",
+        "intro": "Em vez de colar seu ID de membro, envie uma mensagem direta ao bot no Slack e confirme aqui.",
+        "start": "Reivindicar no Slack",
+        "starting": "Conectando…",
+        "needs_tokens": "Salve primeiro o token do bot e o token do app.",
+        "open_hint": "Abra o Slack e envie qualquer mensagem direta ao bot; depois confirme-se abaixo. Fecha às {{time}}.",
+        "waiting": "Aguardando uma mensagem…",
+        "multiple_warning": "Mais de uma pessoa enviou mensagem. Confira o texto antes de confirmar.",
+        "received": "Enviada às {{time}}",
+        "confirm": "Sou eu",
+        "cancel": "Cancelar",
+        "ignored": "Mensagens ignoradas: {{total}}",
+        "confirmed": "Agora você é o proprietário.",
+        "owner_handle": "Proprietário: @{{handle}} ({{workspace}})",
+        "owner_id": "Proprietário: {{id}}",
+        "clear": "Remover proprietário",
+        "cleared_restart": "Proprietário removido. Reinicie o gateway para aplicar.",
+        "error_owner_set": "Já existe um proprietário. Remova-o e reinicie o gateway primeiro.",
+        "error_failed": "Não funcionou ({{reason}})."
+      },
       "slackPanel": {
         "add": "Adicionar",
         "allowed_enterprise_orgs": "Organizações enterprise permitidas",

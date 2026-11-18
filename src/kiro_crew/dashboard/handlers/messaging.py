@@ -236,6 +236,8 @@ from kiro_crew.dashboard.messaging_api.run_views import (  # noqa: F401
     api_spawn_status,
 )
 from kiro_crew.dashboard.messaging_api.slack_settings import (  # noqa: F401
+    _owner_claim_gate,
+    _owner_claim_refused,
     _save_code_channel_dispatch_locked,
     _slack_config_save_locked,
     _validate_slack_token,
@@ -243,6 +245,10 @@ from kiro_crew.dashboard.messaging_api.slack_settings import (  # noqa: F401
     api_slack_config_get,
     api_slack_config_save,
     api_slack_manifest_status,
+    api_slack_owner_claim_cancel,
+    api_slack_owner_claim_confirm,
+    api_slack_owner_claim_get,
+    api_slack_owner_claim_start,
     api_slack_reconnect,
     save_code_channel_dispatch,
 )

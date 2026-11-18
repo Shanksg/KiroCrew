@@ -11227,6 +11227,27 @@
         "review_pending_candidates_on_agent_capabilities": "Review pending candidates on Customize → Skills",
         "skills": "Skills"
       },
+      "slackOwnerClaim": {
+        "title": "Claim ownership from Slack",
+        "intro": "Instead of pasting your member ID, send the bot a direct message in Slack and confirm it here.",
+        "start": "Claim in Slack",
+        "starting": "Connecting…",
+        "needs_tokens": "Save the bot token and the app token first.",
+        "open_hint": "Open Slack and send the bot any direct message, then confirm yourself below. This closes at {{time}}.",
+        "waiting": "Waiting for a message…",
+        "multiple_warning": "More than one person sent a message. Check the text before you confirm.",
+        "received": "Sent at {{time}}",
+        "confirm": "This is me",
+        "cancel": "Cancel",
+        "ignored": "Ignored messages: {{total}}",
+        "confirmed": "You are now the owner.",
+        "owner_handle": "Owner: @{{handle}} ({{workspace}})",
+        "owner_id": "Owner: {{id}}",
+        "clear": "Clear owner",
+        "cleared_restart": "Owner removed. Restart the gateway to apply it.",
+        "error_owner_set": "An owner is already set. Clear it and restart the gateway first.",
+        "error_failed": "That did not work ({{reason}})."
+      },
       "slackPanel": {
         "add": "Add",
         "allowed_enterprise_orgs": "Allowed enterprise orgs",

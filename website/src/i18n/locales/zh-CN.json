@@ -20307,6 +20307,27 @@
         "config_load_failed": "无法加载技能设置。下方开关显示默认值，而非已保存的值。",
         "review_pending_candidates_on_agent_capabilities": "在“自定义 → 技能”中审阅待审候选项"
       },
+      "slackOwnerClaim": {
+        "title": "在 Slack 中认领主人",
+        "intro": "无需粘贴成员 ID：在 Slack 里给机器人发一条私信，然后在这里确认。",
+        "start": "在 Slack 中认领",
+        "starting": "正在连接…",
+        "needs_tokens": "请先保存 bot 令牌和 app 令牌。",
+        "open_hint": "打开 Slack，给机器人发任意一条私信，然后在下方确认你自己。将于 {{time}} 关闭。",
+        "waiting": "正在等待消息…",
+        "multiple_warning": "不止一个人发了消息。确认前请核对消息内容。",
+        "received": "发送于 {{time}}",
+        "confirm": "这是我",
+        "cancel": "取消",
+        "ignored": "已忽略的消息：{{total}}",
+        "confirmed": "你现在是主人了。",
+        "owner_handle": "主人：@{{handle}}（{{workspace}}）",
+        "owner_id": "主人：{{id}}",
+        "clear": "清除主人",
+        "cleared_restart": "已移除主人。请重启网关使其生效。",
+        "error_owner_set": "已经设置了主人。请先清除并重启网关。",
+        "error_failed": "操作未成功（{{reason}}）。"
+      },
       "slackPanel": {
         "add": "添加",
         "allowed_enterprise_orgs": "允许的企业组织",
