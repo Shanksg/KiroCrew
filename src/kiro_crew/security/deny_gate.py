@@ -35,7 +35,7 @@ from kiro_crew.security import _submodule, logger
 from kiro_crew.sel import SecurityEvent, SecurityEventLog
 
 from .redaction_switch import always_scan
-from .shell_commands import sharing_views
+from .shell_commands import SpanReadBudgetExceeded, sharing_views
 from .text_redaction import redact_and_truncate
 
 if TYPE_CHECKING:
@@ -538,6 +538,10 @@ _DEPTH_NOTE = (
     f"a command nested more than {_MAX_SUBSTITUTION_DEPTH} substitutions deep is refused;"
     " flatten it"
 )
+_TOO_COMPLEX_NOTE = (
+    "this command is too complex to check in time, so it is refused;"
+    " move it into a script file and run that"
+)
 
 
 def _nested_past_cap(text: str) -> bool:
@@ -995,7 +999,12 @@ def is_denied(
         elif predicate is _argv._reaches_self_over_ssh:
             # Also the command as submitted: a wrapper's option words keep their
             # case there (``sudo -H`` is not ``sudo -h``).
-            hit = _argv._reaches_self_over_ssh(lower, raw_text=tool_name)
+            try:
+                hit = _argv._reaches_self_over_ssh(lower, raw_text=tool_name)
+            except SpanReadBudgetExceeded:
+                # Fail closed, under the same rule, with a note that says why.
+                _emit_deny_event(tool_name, pattern, lower)
+                return _reason(pattern, _TOO_COMPLEX_NOTE, rule=rule_id, component="argv-floor")
         else:
             hit = predicate(lower)
         if hit:  # never waived: a self-guard rule (``_DenyWaiver``)

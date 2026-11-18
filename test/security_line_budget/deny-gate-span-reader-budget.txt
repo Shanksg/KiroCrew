@@ -1,0 +1,5 @@
++49
+The double-quoted `$( )` span reader in `shell_commands` skips its heredoc re-read when
+no heredoc body can reach the close the walk found (`shell_normalizer_walk` now reports how
+far that walk read), and charges the re-reads left against a budget linear in the line.
+A spent budget raises `SpanReadBudgetExceeded`, which the deny gate refuses with its own note.

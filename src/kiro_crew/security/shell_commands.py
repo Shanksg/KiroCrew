@@ -457,6 +457,14 @@ def without_substitutions(command: str) -> str:
         pos = _shell._matching_close_paren(command, hit + 2, quote_at[hit + 2])[0]
 
 
+# Characters the heredoc re-reads of one span read may spend beyond ``4 * len(text)``.
+_SPAN_READ_BUDGET_FLOOR = 200_000
+
+
+class SpanReadBudgetExceeded(Exception):
+    """The double-quoted ``$( )`` span reader spent its budget; the line is refused."""
+
+
 def heredoc_text_spans(text: str) -> "list[tuple[int, int]]":
     """Raw ``(start, end)`` of each here-document body :func:`read_commands` finds in *text*."""
     if "<<" not in text:
@@ -471,8 +479,15 @@ def _double_quoted_substitution_spans(text: str) -> "list[tuple[int, int, bool]]
 
     *start* is the ``$``; *end* is just past the matching ``)`` when *proven*, else the end
     of *text*. A ``)`` in a heredoc body inside the substitution does not end it.
+
+    A heredoc body starts after the newline that ends its ``<<`` line, so when the text
+    the close walk read has no newline after its first ``<<`` (none at all, a ``<<<``
+    here-string, a ``$(( 1 << n ))`` shift), no body can change that walk and the
+    heredoc re-read is skipped. The re-reads left share one character budget, linear
+    in *text*; past it :class:`SpanReadBudgetExceeded` is raised and the caller refuses.
     """
     spans: "list[tuple[int, int, bool]]" = []
+    budget = 4 * len(text) + _SPAN_READ_BUDGET_FLOOR
     i, state = 0, 0
     while i < len(text):
         dollars = 0
@@ -481,9 +496,16 @@ def _double_quoted_substitution_spans(text: str) -> "list[tuple[int, int, bool]]
             dollars = dollars + 1 if step.state == 2 and step.text == "$" else 0
             if dollars % 2 and text.startswith("(", at + 1):
                 rest = text[at + 2 :]
-                for start, end in heredoc_text_spans(rest):
-                    rest = rest[:start] + re.sub("[^\n]", " ", rest[start:end]) + rest[end:]
-                end, proven = _shell._matching_close_paren(rest, 0)
+                end, proven, reach = _walk._matching_close_paren_reach(rest, 0)
+                window = rest if reach is None else rest[:reach]
+                k = window.find("<<")
+                if k >= 0 and "\n" in window[k:]:
+                    budget -= len(rest)
+                    if budget < 0:
+                        raise SpanReadBudgetExceeded
+                    for start, stop in heredoc_text_spans(rest):
+                        rest = rest[:start] + re.sub("[^\n]", " ", rest[start:stop]) + rest[stop:]
+                    end, proven = _shell._matching_close_paren(rest, 0)
                 spans.append((at, at + 2 + end if proven else len(text), proven))
                 i, state = spans[-1][1], 2
                 break

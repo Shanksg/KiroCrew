@@ -1186,7 +1186,14 @@ Two mechanisms make "the split changed nothing for a caller" a tested claim rath
   re-reads the bodies nested in it. Each body re-reads the rest of the line, so before the
   span readers run, `_cannot_name_ssh_verb` returns early on a line no masking of it lets
   name an ssh-family verb (no verb, no `${` default, no `[` class beside a quoted
-  separator); the verb gate after the mask then sees the same answer. The floor does not model `#` comments: a quoted `$( )` before a comment
+  separator); the verb gate after the mask then sees the same answer. A body re-reads the
+  rest of the line for heredocs only when a newline follows a `<<` in the text its close
+  walk read (`shell_normalizer_walk._matching_close_paren_reach`), since a heredoc body
+  starts after that newline; a `<<<` here-string or a `$(( 1 << n ))` shift needs no
+  re-read. The re-reads left share a budget of `4 * len(line) + 200,000` characters per
+  span read. Past it `SpanReadBudgetExceeded` is raised, and the gate refuses the line
+  under this rule with a note that the command is too complex to check and should move
+  into a script file. The floor does not model `#` comments: a quoted `$( )` before a comment
   whose text names ssh to this host is refused, as main refuses the same line without the
   quote.
   Within one `is_denied` call (`call_views.sharing_views`, which this module also serves

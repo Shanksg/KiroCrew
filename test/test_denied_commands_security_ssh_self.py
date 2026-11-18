@@ -26,6 +26,7 @@ from kiro_crew.security import BUILTIN_DENIED_RULES
 from kiro_crew.security import argv_floor as _argv_floor
 from kiro_crew.security import compute_effective_denied, is_denied, is_safe_user_regex
 from kiro_crew.security.call_views import _CALL_VIEWS, sharing_views
+from kiro_crew.security.shell_commands import SpanReadBudgetExceeded
 
 # Each test starts with the macOS libc and libproc handle caches unbuilt and puts them
 # back after, as every test of the test_denied_commands_security family does (see conftest.py).
@@ -1781,7 +1782,9 @@ class TestSandboxEscapeSshSelf:
         for tail in ("", "; ls *.py", "; test -f a?b", "; [ -f x ]"):
             assert _argv_floor._reaches_self_over_ssh(body * 400 + tail) is False
         assert reads == []
-        assert _argv_floor._reaches_self_over_ssh(body * 400 + "; ssh -p 22 localhost id") is True
+        # 400 heredoc bodies spend the span reader's budget, which refuses.
+        with pytest.raises(SpanReadBudgetExceeded):
+            _argv_floor._reaches_self_over_ssh(body * 400 + "; ssh -p 22 localhost id")
         assert reads != []
 
     @pytest.mark.parametrize(

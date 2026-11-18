@@ -151,7 +151,10 @@ def _reaches_self_over_ssh(text_lower: str, raw_text: "str | None" = None) -> bo
     and on each substitution body bash runs in it or in those scripts. Either the
     quote-aware reading or main's splice reading (*_MAIN_READING*) of the line refusing
     refuses; the bodies are judged once, in the quote-aware reading. *raw_text* is the
-    command as submitted, for the wrapper option words of the line itself."""
+    command as submitted, for the wrapper option words of the line itself.
+
+    Raises :class:`SpanReadBudgetExceeded` when the line's quoted bodies are too costly
+    to read; the gate refuses it with its own note."""
     scripts = _quoted_assignment_scripts(text_lower)
     if _is_ssh_to_self(text_lower, own_line=True, raw_text=raw_text) or any(
         map(_is_ssh_to_self, scripts)
